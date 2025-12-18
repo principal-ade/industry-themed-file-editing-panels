@@ -27,13 +27,22 @@ export default defineConfig(({ mode }) => ({
       formats: ['es'],
     },
     rollupOptions: {
-      // Externalize peer dependencies - these come from the host application
-      external: ['react', 'react-dom', 'react/jsx-runtime'],
+      // Externalize peer dependencies and Monaco editor - these come from the host application
+      external: [
+        'react',
+        'react-dom',
+        'react/jsx-runtime',
+        'monaco-editor',
+        '@monaco-editor/react',
+        '@principal-ade/industry-themed-monaco-editor',
+      ],
       output: {
         globals: {
           react: 'React',
           'react-dom': 'ReactDOM',
           'react/jsx-runtime': 'jsxRuntime',
+          'monaco-editor': 'monaco',
+          '@monaco-editor/react': 'MonacoReact',
         },
       },
     },
