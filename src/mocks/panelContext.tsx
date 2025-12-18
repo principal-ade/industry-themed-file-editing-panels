@@ -122,9 +122,7 @@ export const createMockContext = (
     },
     getWorkspaceSlice: <T,>(name: string): DataSlice<T> | undefined => {
       const slice = mockSlices.get(name);
-      return slice?.scope === 'workspace'
-        ? (slice as DataSlice<T>)
-        : undefined;
+      return slice?.scope === 'workspace' ? (slice as DataSlice<T>) : undefined;
     },
     getRepositorySlice: <T,>(name: string): DataSlice<T> | undefined => {
       const slice = mockSlices.get(name);
@@ -242,5 +240,7 @@ export const MockPanelProvider: React.FC<{
   const actions = createMockActions(actionsOverrides);
   const events = createMockEvents();
 
-  return <ThemeProvider>{children({ context, actions, events })}</ThemeProvider>;
+  return (
+    <ThemeProvider>{children({ context, actions, events })}</ThemeProvider>
+  );
 };

@@ -65,9 +65,15 @@ export interface FileContentProvider {
  */
 export interface DiffContentProvider {
   /** Get the original (baseline) content for comparison */
-  getOriginal: (path: string, status: GitChangeStatus) => Promise<string | null>;
+  getOriginal: (
+    path: string,
+    status: GitChangeStatus
+  ) => Promise<string | null>;
   /** Get the modified (working tree) content */
-  getModified: (path: string, status: GitChangeStatus) => Promise<string | null>;
+  getModified: (
+    path: string,
+    status: GitChangeStatus
+  ) => Promise<string | null>;
 }
 
 /**

@@ -9,7 +9,10 @@
  * Use the './tools' subpath export for server-safe imports.
  */
 
-import type { PanelTool, PanelToolsMetadata } from '@principal-ade/utcp-panel-event';
+import type {
+  PanelTool,
+  PanelToolsMetadata,
+} from '@principal-ade/utcp-panel-event';
 
 /**
  * Tool: Open File in Editor

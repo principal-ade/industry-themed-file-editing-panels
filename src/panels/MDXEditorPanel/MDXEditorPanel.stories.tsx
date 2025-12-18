@@ -168,7 +168,9 @@ export const ErrorState: Story = {
   args: {
     filePath: '/docs/missing.md',
     contentProvider: {
-      readFile: async (): Promise<string | null> => { throw new globalThis.Error('File not found'); },
+      readFile: async (): Promise<string | null> => {
+        throw new globalThis.Error('File not found');
+      },
     },
   },
 };

@@ -95,7 +95,8 @@ export const FileEditorPanel: React.FC<FileEditorPanelProps> = ({
 
   // Determine if this is a local file that supports editing
   const isLocalFile = source?.type === 'local';
-  const isEditable = isLocalFile && !forceReadOnly && !!contentProvider.writeFile;
+  const isEditable =
+    isLocalFile && !forceReadOnly && !!contentProvider.writeFile;
 
   const loadFile = useCallback(async () => {
     if (!filePath) {

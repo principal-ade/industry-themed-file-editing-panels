@@ -74,10 +74,12 @@ export const MDXEditorPanel: React.FC<MDXEditorPanelProps> = ({
       linkPlugin(),
       linkDialogPlugin(),
       imagePlugin({
-        imageUploadHandler: onImageUpload ?? (async (file) => {
-          console.log('Image upload not configured:', file.name);
-          return '/placeholder-image.png';
-        }),
+        imageUploadHandler:
+          onImageUpload ??
+          (async (file) => {
+            console.log('Image upload not configured:', file.name);
+            return '/placeholder-image.png';
+          }),
       }),
       tablePlugin(),
       codeBlockPlugin({ defaultCodeBlockLanguage: 'javascript' }),
@@ -180,13 +182,21 @@ export const MDXEditorPanel: React.FC<MDXEditorPanelProps> = ({
     };
 
     loadFileContent();
-  }, [filePath, contentProvider, initialContent, currentFilePath, isDirty, markdown]);
+  }, [
+    filePath,
+    contentProvider,
+    initialContent,
+    currentFilePath,
+    isDirty,
+    markdown,
+  ]);
 
   // Auto-save on component unmount
   useEffect(() => {
     return () => {
       if (currentFilePath && isDirty && contentProvider?.writeFile) {
-        contentProvider.writeFile(currentFilePath, markdown)
+        contentProvider
+          .writeFile(currentFilePath, markdown)
           .then(() => {
             console.log('Auto-saved on unmount:', currentFilePath);
           })

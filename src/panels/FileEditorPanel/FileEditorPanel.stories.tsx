@@ -162,7 +162,9 @@ export const ErrorState: Story = {
     filePath: '/src/missing-file.tsx',
     source: { type: 'local' } as FileSource,
     contentProvider: {
-      readFile: async (): Promise<string | null> => { throw new globalThis.Error('File not found'); },
+      readFile: async (): Promise<string | null> => {
+        throw new globalThis.Error('File not found');
+      },
     },
   },
 };

@@ -15,7 +15,10 @@ npm install @industry-theme/file-editing-panels
 Side-by-side git diff viewer with syntax highlighting.
 
 ```tsx
-import { GitDiffPanel, DiffContentProvider } from '@industry-theme/file-editing-panels';
+import {
+  GitDiffPanel,
+  DiffContentProvider,
+} from '@industry-theme/file-editing-panels';
 
 const diffProvider: DiffContentProvider = {
   getOriginal: async (path, status) => {
@@ -33,7 +36,7 @@ const diffProvider: DiffContentProvider = {
   status="unstaged" // 'staged' | 'unstaged' | 'untracked' | 'deleted'
   diffProvider={diffProvider}
   onClose={() => {}}
-/>
+/>;
 ```
 
 ### FileEditorPanel
@@ -41,7 +44,10 @@ const diffProvider: DiffContentProvider = {
 Code editor with syntax highlighting, save support, and optional vim mode.
 
 ```tsx
-import { FileEditorPanel, FileContentProvider } from '@industry-theme/file-editing-panels';
+import {
+  FileEditorPanel,
+  FileContentProvider,
+} from '@industry-theme/file-editing-panels';
 
 const contentProvider: FileContentProvider = {
   readFile: async (path) => await fs.readFile(path, 'utf-8'),
@@ -59,7 +65,7 @@ const contentProvider: FileContentProvider = {
   vimMode={false}
   readOnly={false}
   onClose={() => {}}
-/>
+/>;
 ```
 
 ### MDXEditorPanel
@@ -67,7 +73,10 @@ const contentProvider: FileContentProvider = {
 Rich markdown/MDX editor with toolbar and live preview.
 
 ```tsx
-import { MDXEditorPanel, FileContentProvider } from '@industry-theme/file-editing-panels';
+import {
+  MDXEditorPanel,
+  FileContentProvider,
+} from '@industry-theme/file-editing-panels';
 
 <MDXEditorPanel
   filePath="/docs/README.md"
@@ -78,7 +87,7 @@ import { MDXEditorPanel, FileContentProvider } from '@industry-theme/file-editin
     // Upload image and return URL
     return await uploadImage(file);
   }}
-/>
+/>;
 ```
 
 ## Provider Interfaces
@@ -97,8 +106,14 @@ interface FileContentProvider {
 
 ```typescript
 interface DiffContentProvider {
-  getOriginal: (path: string, status: GitChangeStatus) => Promise<string | null>;
-  getModified: (path: string, status: GitChangeStatus) => Promise<string | null>;
+  getOriginal: (
+    path: string,
+    status: GitChangeStatus
+  ) => Promise<string | null>;
+  getModified: (
+    path: string,
+    status: GitChangeStatus
+  ) => Promise<string | null>;
 }
 ```
 
@@ -117,7 +132,7 @@ import { ThemeProvider } from '@principal-ade/industry-theme';
 
 <ThemeProvider>
   <GitDiffPanel {...props} />
-</ThemeProvider>
+</ThemeProvider>;
 ```
 
 ## Dependencies

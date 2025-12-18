@@ -32,13 +32,22 @@ export function Button({ label, onClick, variant = 'primary' }: ButtonProps) {
   );
 }`;
 
-const createMockDiffProvider = (original: string, modified: string): DiffContentProvider => ({
+const createMockDiffProvider = (
+  original: string,
+  modified: string
+): DiffContentProvider => ({
   getOriginal: async () => {
-    console.log('getOriginal called, returning:', original.substring(0, 50) + '...');
+    console.log(
+      'getOriginal called, returning:',
+      original.substring(0, 50) + '...'
+    );
     return original;
   },
   getModified: async () => {
-    console.log('getModified called, returning:', modified.substring(0, 50) + '...');
+    console.log(
+      'getModified called, returning:',
+      modified.substring(0, 50) + '...'
+    );
     return modified;
   },
 });
@@ -65,7 +74,10 @@ export const UnstagedChanges: Story = {
   args: {
     filePath: 'src/components/Button.tsx',
     status: 'unstaged' as GitChangeStatus,
-    diffProvider: createMockDiffProvider(mockOriginalContent, mockModifiedContent),
+    diffProvider: createMockDiffProvider(
+      mockOriginalContent,
+      mockModifiedContent
+    ),
     onClose: () => console.log('Close clicked'),
   },
 };
@@ -74,7 +86,10 @@ export const StagedChanges: Story = {
   args: {
     filePath: 'src/components/Button.tsx',
     status: 'staged' as GitChangeStatus,
-    diffProvider: createMockDiffProvider(mockOriginalContent, mockModifiedContent),
+    diffProvider: createMockDiffProvider(
+      mockOriginalContent,
+      mockModifiedContent
+    ),
     onClose: () => console.log('Close clicked'),
   },
 };
@@ -120,8 +135,12 @@ export const ErrorState: Story = {
     filePath: 'src/components/Button.tsx',
     status: 'unstaged' as GitChangeStatus,
     diffProvider: {
-      getOriginal: async (): Promise<string | null> => { throw new globalThis.Error('Failed to fetch original content'); },
-      getModified: async (): Promise<string | null> => { throw new globalThis.Error('Failed to fetch modified content'); },
+      getOriginal: async (): Promise<string | null> => {
+        throw new globalThis.Error('Failed to fetch original content');
+      },
+      getModified: async (): Promise<string | null> => {
+        throw new globalThis.Error('Failed to fetch modified content');
+      },
     },
   },
 };

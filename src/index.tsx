@@ -8,7 +8,10 @@
 
 // Panel Components
 export { GitDiffPanel, GitDiffPanelPreview } from './panels/GitDiffPanel';
-export { FileEditorPanel, FileEditorPanelPreview } from './panels/FileEditorPanel';
+export {
+  FileEditorPanel,
+  FileEditorPanelPreview,
+} from './panels/FileEditorPanel';
 export { MDXEditorPanel, MDXEditorPanelPreview } from './panels/MDXEditorPanel';
 
 // Panel Props Types

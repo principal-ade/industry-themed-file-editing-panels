@@ -16,7 +16,10 @@ export interface GitDiffPanelProps {
   onClose?: () => void;
 }
 
-const statusMeta: Record<GitChangeStatus, { label: string; description: string }> = {
+const statusMeta: Record<
+  GitChangeStatus,
+  { label: string; description: string }
+> = {
   staged: {
     label: 'Staged change',
     description: 'Comparing staged changes against the last commit',
