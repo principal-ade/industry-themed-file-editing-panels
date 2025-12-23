@@ -1,20 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useTheme } from '@principal-ade/industry-theme';
+import { ThemeProvider, useTheme } from '@principal-ade/industry-theme';
 import { ThemedMonacoDiffEditor } from '@principal-ade/industry-themed-monaco-editor';
 import { GitCommit, X } from 'lucide-react';
 
-import type { GitChangeStatus, DiffContentProvider } from '../../types';
-
-export interface GitDiffPanelProps {
-  /** Relative path to the file being diffed */
-  filePath: string | null;
-  /** Git change status */
-  status?: GitChangeStatus;
-  /** Provider for fetching diff content */
-  diffProvider: DiffContentProvider;
-  /** Called when close button is clicked */
-  onClose?: () => void;
-}
+import type { PanelComponentProps, GitChangeStatus } from '../../types';
 
 const statusMeta: Record<
   GitChangeStatus,
@@ -86,13 +75,24 @@ const languageFromPath = (filePath: string | null): string => {
   return languageMap[ext] ?? 'plaintext';
 };
 
-export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
-  filePath,
-  status = 'unstaged',
-  diffProvider,
-  onClose,
+interface GitDiffPayload {
+  path: string;
+  status?: GitChangeStatus;
+  original?: string;
+  modified?: string;
+}
+
+/**
+ * GitDiffPanelContent - Internal component that uses theme
+ */
+const GitDiffPanelContent: React.FC<PanelComponentProps> = ({
+  context,
+  actions: _actions,
+  events,
 }) => {
   const { theme } = useTheme();
+  const [filePath, setFilePath] = useState<string | null>(null);
+  const [status, setStatus] = useState<GitChangeStatus>('unstaged');
   const [originalContent, setOriginalContent] = useState<string>('');
   const [modifiedContent, setModifiedContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
@@ -100,6 +100,29 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
 
   const language = useMemo(() => languageFromPath(filePath), [filePath]);
 
+  // Get file system adapter from context
+  const fileSystem = context.adapters?.fileSystem;
+
+  // Listen for git:diff events
+  useEffect(() => {
+    const unsubscribe = events.on('git:diff', (event) => {
+      const payload = event.payload as GitDiffPayload;
+      if (payload?.path) {
+        setFilePath(payload.path);
+        setStatus(payload.status || 'unstaged');
+        // If content is provided directly, use it
+        if (payload.original !== undefined || payload.modified !== undefined) {
+          setOriginalContent(payload.original ?? '');
+          setModifiedContent(payload.modified ?? '');
+          setIsLoading(false);
+          setError(null);
+        }
+      }
+    });
+    return unsubscribe;
+  }, [events]);
+
+  // Load diff content when file path changes
   useEffect(() => {
     let isActive = true;
 
@@ -112,19 +135,28 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
         return;
       }
 
+      // If we don't have a file system adapter, we can't load content
+      if (!fileSystem?.readFile) {
+        // Content should be provided via events
+        return;
+      }
+
       setIsLoading(true);
       setError(null);
 
       try {
-        const [original, modified] = await Promise.all([
-          diffProvider.getOriginal(filePath, status),
-          diffProvider.getModified(filePath, status),
-        ]);
+        // For now, read the current file content as "modified"
+        // The "original" would need to come from git or be provided via events
+        const modified = await fileSystem.readFile(filePath);
 
         if (!isActive) return;
 
-        setOriginalContent(original ?? '');
         setModifiedContent(modified ?? '');
+        // Original content should be provided via git:diff event payload
+        // or we leave it empty for new files
+        if (status === 'untracked') {
+          setOriginalContent('');
+        }
       } catch (err) {
         if (!isActive) return;
 
@@ -148,7 +180,17 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
     return () => {
       isActive = false;
     };
-  }, [filePath, status, diffProvider]);
+  }, [filePath, status, fileSystem]);
+
+  const handleClose = () => {
+    events.emit({
+      type: 'git:diff:close',
+      source: 'industry-theme.git-diff',
+      timestamp: Date.now(),
+      payload: { path: filePath },
+    });
+    setFilePath(null);
+  };
 
   const statusInfo = status ? statusMeta[status] : null;
   const statusColor = useMemo(() => {
@@ -178,6 +220,7 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
           justifyContent: 'center',
           color: theme.colors.textSecondary,
           backgroundColor: theme.colors.backgroundSecondary,
+          fontFamily: theme.fonts.body,
         }}
       >
         Select a file from Git Changes to view its diff.
@@ -196,128 +239,88 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
     >
       <div
         style={{
-          padding: '12px 16px',
+          height: '40px',
+          padding: '0 12px',
           borderBottom: `1px solid ${theme.colors.border}`,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           backgroundColor: theme.colors.backgroundSecondary,
+          fontFamily: theme.fonts.body,
+          flexShrink: 0,
+          boxSizing: 'border-box',
         }}
       >
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
+            gap: '8px',
+            flex: 1,
             minWidth: 0,
           }}
         >
+          <GitCommit
+            size={16}
+            style={{ color: theme.colors.primary, flexShrink: 0 }}
+          />
           <div
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              minWidth: 0,
+              fontSize: theme.fontSizes[2],
+              fontWeight: 600,
+              color: theme.colors.text,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
             }}
+            title={filePath}
           >
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '6px',
-                backgroundColor: theme.colors.backgroundTertiary,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: theme.colors.text,
-              }}
-            >
-              <GitCommit size={18} />
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '4px',
-                minWidth: 0,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: theme.fontSizes[2],
-                  fontWeight: 600,
-                  color: theme.colors.text,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}
-                title={filePath}
-              >
-                {filePath}
-              </div>
-              {statusInfo && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                  }}
-                >
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      fontSize: theme.fontSizes[0],
-                      padding: '2px 8px',
-                      borderRadius: '999px',
-                      backgroundColor: `${statusColor}20`,
-                      color: statusColor,
-                      border: `1px solid ${statusColor}60`,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {statusInfo.label}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: theme.fontSizes[0],
-                      color: theme.colors.textSecondary,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {statusInfo.description}
-                  </span>
-                </div>
-              )}
-            </div>
+            {filePath?.split('/').pop() || filePath}
           </div>
+          {statusInfo && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                fontSize: theme.fontSizes[0],
+                padding: '2px 8px',
+                borderRadius: '999px',
+                backgroundColor: `${statusColor}20`,
+                color: statusColor,
+                border: `1px solid ${statusColor}60`,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              {statusInfo.label}
+            </span>
+          )}
         </div>
-        {onClose && (
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              padding: '4px',
-              cursor: 'pointer',
-              color: theme.colors.textSecondary,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: '4px',
-              transition: 'background-color 0.2s',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor =
-                theme.colors.backgroundTertiary;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }}
-          >
-            <X size={16} />
-          </button>
-        )}
+        <button
+          onClick={handleClose}
+          style={{
+            background: 'none',
+            border: 'none',
+            padding: '4px',
+            cursor: 'pointer',
+            color: theme.colors.textSecondary,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '4px',
+            transition: 'background-color 0.2s',
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor =
+              theme.colors.backgroundTertiary;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }}
+        >
+          <X size={16} />
+        </button>
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>
         {isLoading ? (
@@ -328,6 +331,7 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
               alignItems: 'center',
               justifyContent: 'center',
               color: theme.colors.textSecondary,
+              fontFamily: theme.fonts.body,
             }}
           >
             Loading diff...
@@ -342,6 +346,7 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
               color: theme.colors.error,
               padding: '20px',
               textAlign: 'center',
+              fontFamily: theme.fonts.body,
             }}
           >
             {error}
@@ -385,6 +390,22 @@ export const GitDiffPanel: React.FC<GitDiffPanelProps> = ({
         )}
       </div>
     </div>
+  );
+};
+
+/**
+ * GitDiffPanel - Side-by-side git diff viewer.
+ *
+ * This panel shows:
+ * - Side-by-side comparison of original vs modified content
+ * - Status indicators for staged/unstaged/untracked/deleted files
+ * - Syntax highlighting based on file type
+ */
+export const GitDiffPanel: React.FC<PanelComponentProps> = (props) => {
+  return (
+    <ThemeProvider>
+      <GitDiffPanelContent {...props} />
+    </ThemeProvider>
   );
 };
 

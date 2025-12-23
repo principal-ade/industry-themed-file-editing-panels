@@ -1,6 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import { useEffect, useRef } from 'react';
 import { GitDiffPanel } from './GitDiffPanel';
-import type { DiffContentProvider, GitChangeStatus } from '../../types';
+import {
+  createMockContext,
+  createMockActions,
+  createMockEvents,
+  emitGitDiff,
+} from '../../mocks/panelContext';
+import type { PanelComponentProps, GitChangeStatus } from '../../types';
 
 // Mock diff content for stories
 const mockOriginalContent = `import React from 'react';
@@ -32,29 +39,44 @@ export function Button({ label, onClick, variant = 'primary' }: ButtonProps) {
   );
 }`;
 
-const createMockDiffProvider = (
-  original: string,
-  modified: string
-): DiffContentProvider => ({
-  getOriginal: async () => {
-    console.log(
-      'getOriginal called, returning:',
-      original.substring(0, 50) + '...'
-    );
-    return original;
-  },
-  getModified: async () => {
-    console.log(
-      'getModified called, returning:',
-      modified.substring(0, 50) + '...'
-    );
-    return modified;
-  },
-});
+// Helper component that wraps GitDiffPanel with mock context
+const GitDiffPanelWithMocks = ({
+  initialFilePath,
+  status = 'unstaged',
+  original = '',
+  modified = '',
+}: {
+  initialFilePath?: string;
+  status?: GitChangeStatus;
+  original?: string;
+  modified?: string;
+}) => {
+  const context = createMockContext();
+  const actions = createMockActions();
+  const events = createMockEvents();
+  const hasEmittedRef = useRef(false);
 
-const meta: Meta<typeof GitDiffPanel> = {
+  useEffect(() => {
+    if (initialFilePath && !hasEmittedRef.current) {
+      hasEmittedRef.current = true;
+      // Small delay to ensure component is mounted
+      setTimeout(() => {
+        emitGitDiff(events, initialFilePath, status, original, modified);
+      }, 100);
+    }
+  }, [initialFilePath, status, original, modified, events]);
+
+  const props: PanelComponentProps = { context, actions, events };
+  return (
+    <div style={{ height: '100%', width: '100%' }}>
+      <GitDiffPanel {...props} />
+    </div>
+  );
+};
+
+const meta: Meta<typeof GitDiffPanelWithMocks> = {
   title: 'Panels/GitDiffPanel',
-  component: GitDiffPanel,
+  component: GitDiffPanelWithMocks,
   parameters: {
     layout: 'fullscreen',
   },
@@ -68,79 +90,46 @@ const meta: Meta<typeof GitDiffPanel> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof GitDiffPanel>;
+type Story = StoryObj<typeof GitDiffPanelWithMocks>;
 
 export const UnstagedChanges: Story = {
   args: {
-    filePath: 'src/components/Button.tsx',
-    status: 'unstaged' as GitChangeStatus,
-    diffProvider: createMockDiffProvider(
-      mockOriginalContent,
-      mockModifiedContent
-    ),
-    onClose: () => console.log('Close clicked'),
+    initialFilePath: 'src/components/Button.tsx',
+    status: 'unstaged',
+    original: mockOriginalContent,
+    modified: mockModifiedContent,
   },
 };
 
 export const StagedChanges: Story = {
   args: {
-    filePath: 'src/components/Button.tsx',
-    status: 'staged' as GitChangeStatus,
-    diffProvider: createMockDiffProvider(
-      mockOriginalContent,
-      mockModifiedContent
-    ),
-    onClose: () => console.log('Close clicked'),
+    initialFilePath: 'src/components/Button.tsx',
+    status: 'staged',
+    original: mockOriginalContent,
+    modified: mockModifiedContent,
   },
 };
 
 export const UntrackedFile: Story = {
   args: {
-    filePath: 'src/components/NewComponent.tsx',
-    status: 'untracked' as GitChangeStatus,
-    diffProvider: createMockDiffProvider('', mockModifiedContent),
-    onClose: () => console.log('Close clicked'),
+    initialFilePath: 'src/components/NewComponent.tsx',
+    status: 'untracked',
+    original: '',
+    modified: mockModifiedContent,
   },
 };
 
 export const DeletedFile: Story = {
   args: {
-    filePath: 'src/components/OldComponent.tsx',
-    status: 'deleted' as GitChangeStatus,
-    diffProvider: createMockDiffProvider(mockOriginalContent, ''),
-    onClose: () => console.log('Close clicked'),
+    initialFilePath: 'src/components/OldComponent.tsx',
+    status: 'deleted',
+    original: mockOriginalContent,
+    modified: '',
   },
 };
 
 export const NoFileSelected: Story = {
   args: {
-    filePath: null,
-    diffProvider: createMockDiffProvider('', ''),
-  },
-};
-
-export const Loading: Story = {
-  args: {
-    filePath: 'src/components/Button.tsx',
-    status: 'unstaged' as GitChangeStatus,
-    diffProvider: {
-      getOriginal: () => new Promise<string | null>(() => {}), // Never resolves
-      getModified: () => new Promise<string | null>(() => {}),
-    },
-  },
-};
-
-export const ErrorState: Story = {
-  args: {
-    filePath: 'src/components/Button.tsx',
-    status: 'unstaged' as GitChangeStatus,
-    diffProvider: {
-      getOriginal: async (): Promise<string | null> => {
-        throw new globalThis.Error('Failed to fetch original content');
-      },
-      getModified: async (): Promise<string | null> => {
-        throw new globalThis.Error('Failed to fetch modified content');
-      },
-    },
+    initialFilePath: undefined,
   },
 };

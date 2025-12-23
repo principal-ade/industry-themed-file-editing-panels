@@ -1,6 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import { useEffect, useRef } from 'react';
 import { FileEditorPanel } from './FileEditorPanel';
-import type { FileContentProvider, FileSource } from '../../types';
+import {
+  createMockContext,
+  createMockActions,
+  createMockEvents,
+  emitFileOpen,
+} from '../../mocks/panelContext';
+import type { PanelComponentProps } from '../../types';
 
 // Mock file content
 const mockTypeScriptContent = `import React, { useState } from 'react';
@@ -49,26 +56,49 @@ A code editor panel with syntax highlighting and editing capabilities.
 import { FileEditorPanel } from '@industry-theme/file-editing-panels';
 
 <FileEditorPanel
-  filePath="/src/App.tsx"
-  contentProvider={myProvider}
+  context={context}
+  actions={actions}
+  events={events}
 />
 \`\`\`
 `;
 
-const createMockContentProvider = (content: string): FileContentProvider => ({
-  readFile: async () => content,
-  writeFile: async (path, newContent) => {
-    console.log('Saving file:', path, newContent.substring(0, 100) + '...');
-  },
-});
+// Helper component that wraps FileEditorPanel with mock context
+const FileEditorPanelWithMocks = ({
+  initialFilePath,
+  initialFiles,
+  vimMode = false,
+}: {
+  initialFilePath?: string;
+  initialFiles?: Record<string, string>;
+  vimMode?: boolean;
+}) => {
+  const context = createMockContext(undefined, initialFiles, { vimMode });
+  const actions = createMockActions();
+  const events = createMockEvents();
+  const hasEmittedRef = useRef(false);
 
-const readOnlyProvider: FileContentProvider = {
-  readFile: async () => mockTypeScriptContent,
+  useEffect(() => {
+    if (initialFilePath && !hasEmittedRef.current) {
+      hasEmittedRef.current = true;
+      // Small delay to ensure component is mounted
+      setTimeout(() => {
+        emitFileOpen(events, initialFilePath);
+      }, 100);
+    }
+  }, [initialFilePath, events]);
+
+  const props: PanelComponentProps = { context, actions, events };
+  return (
+    <div style={{ height: '100%', width: '100%' }}>
+      <FileEditorPanel {...props} />
+    </div>
+  );
 };
 
-const meta: Meta<typeof FileEditorPanel> = {
+const meta: Meta<typeof FileEditorPanelWithMocks> = {
   title: 'Panels/FileEditorPanel',
-  component: FileEditorPanel,
+  component: FileEditorPanelWithMocks,
   parameters: {
     layout: 'fullscreen',
   },
@@ -82,89 +112,58 @@ const meta: Meta<typeof FileEditorPanel> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof FileEditorPanel>;
+type Story = StoryObj<typeof FileEditorPanelWithMocks>;
 
 export const TypeScriptFile: Story = {
   args: {
-    filePath: '/src/components/Counter.tsx',
-    source: { type: 'local', location: '/Users/dev/project' } as FileSource,
-    contentProvider: createMockContentProvider(mockTypeScriptContent),
-    onClose: () => console.log('Close clicked'),
+    initialFilePath: '/Users/developer/my-project/src/Counter.tsx',
+    initialFiles: {
+      '/Users/developer/my-project/src/Counter.tsx': mockTypeScriptContent,
+    },
   },
 };
 
 export const JsonFile: Story = {
   args: {
-    filePath: '/package.json',
-    source: { type: 'local', location: '/Users/dev/project' } as FileSource,
-    contentProvider: createMockContentProvider(mockJsonContent),
-    onClose: () => console.log('Close clicked'),
+    initialFilePath: '/Users/developer/my-project/package.json',
+    initialFiles: {
+      '/Users/developer/my-project/package.json': mockJsonContent,
+    },
   },
 };
 
 export const MarkdownFile: Story = {
   args: {
-    filePath: '/README.md',
-    source: { type: 'local', location: '/Users/dev/project' } as FileSource,
-    contentProvider: createMockContentProvider(mockMarkdownContent),
-    onClose: () => console.log('Close clicked'),
-  },
-};
-
-export const ReadOnlyMode: Story = {
-  args: {
-    filePath: '/src/components/Counter.tsx',
-    source: { type: 'local' } as FileSource,
-    contentProvider: readOnlyProvider,
-    readOnly: true,
-    onClose: () => console.log('Close clicked'),
-  },
-};
-
-export const RemoteFile: Story = {
-  args: {
-    filePath: '/src/components/Counter.tsx',
-    source: { type: 'remote' } as FileSource,
-    contentProvider: createMockContentProvider(mockTypeScriptContent),
-    onClose: () => console.log('Close clicked'),
-  },
-};
-
-export const WithVimMode: Story = {
-  args: {
-    filePath: '/src/components/Counter.tsx',
-    source: { type: 'local', location: '/Users/dev/project' } as FileSource,
-    contentProvider: createMockContentProvider(mockTypeScriptContent),
-    vimMode: true,
-    onClose: () => console.log('Close clicked'),
+    initialFilePath: '/Users/developer/my-project/README.md',
+    initialFiles: {
+      '/Users/developer/my-project/README.md': mockMarkdownContent,
+    },
   },
 };
 
 export const NoFileSelected: Story = {
   args: {
-    filePath: null,
-    contentProvider: createMockContentProvider(''),
+    initialFilePath: undefined,
   },
 };
 
-export const Loading: Story = {
+export const MultipleFiles: Story = {
   args: {
-    filePath: '/src/App.tsx',
-    source: { type: 'local' } as FileSource,
-    contentProvider: {
-      readFile: () => new Promise<string | null>(() => {}), // Never resolves
+    initialFilePath: '/Users/developer/my-project/src/Counter.tsx',
+    initialFiles: {
+      '/Users/developer/my-project/src/Counter.tsx': mockTypeScriptContent,
+      '/Users/developer/my-project/package.json': mockJsonContent,
+      '/Users/developer/my-project/README.md': mockMarkdownContent,
     },
   },
 };
 
-export const ErrorState: Story = {
+export const WithVimMode: Story = {
   args: {
-    filePath: '/src/missing-file.tsx',
-    source: { type: 'local' } as FileSource,
-    contentProvider: {
-      readFile: async (): Promise<string | null> => {
-        throw new globalThis.Error('File not found');
-      },
+    initialFilePath: '/Users/developer/my-project/src/Counter.tsx',
+    initialFiles: {
+      '/Users/developer/my-project/src/Counter.tsx': mockTypeScriptContent,
     },
+    vimMode: true,
   },
 };

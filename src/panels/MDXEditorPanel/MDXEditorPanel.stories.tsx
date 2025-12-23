@@ -1,6 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import { useEffect, useRef } from 'react';
 import { MDXEditorPanel } from './MDXEditorPanel';
-import type { FileContentProvider } from '../../types';
+import {
+  createMockContext,
+  createMockActions,
+  createMockEvents,
+  emitFileOpen,
+} from '../../mocks/panelContext';
+import type { PanelComponentProps } from '../../types';
 
 // Mock markdown content
 const mockReadmeContent = `# Project Documentation
@@ -23,8 +30,9 @@ import { MDXEditorPanel } from '@industry-theme/file-editing-panels';
 function App() {
   return (
     <MDXEditorPanel
-      filePath="/docs/README.md"
-      contentProvider={myProvider}
+      context={context}
+      actions={actions}
+      events={events}
     />
   );
 }
@@ -81,17 +89,40 @@ function Greeting({ name }) {
 That's it! You're ready to start using MDX.
 `;
 
-const createMockContentProvider = (content: string): FileContentProvider => ({
-  readFile: async () => content,
-  writeFile: async (path, newContent) => {
-    console.log('Saving MDX file:', path);
-    console.log('Content length:', newContent.length);
-  },
-});
+// Helper component that wraps MDXEditorPanel with mock context
+const MDXEditorPanelWithMocks = ({
+  initialFilePath,
+  initialFiles,
+}: {
+  initialFilePath?: string;
+  initialFiles?: Record<string, string>;
+}) => {
+  const context = createMockContext(undefined, initialFiles);
+  const actions = createMockActions();
+  const events = createMockEvents();
+  const hasEmittedRef = useRef(false);
 
-const meta: Meta<typeof MDXEditorPanel> = {
+  useEffect(() => {
+    if (initialFilePath && !hasEmittedRef.current) {
+      hasEmittedRef.current = true;
+      // Small delay to ensure component is mounted
+      setTimeout(() => {
+        emitFileOpen(events, initialFilePath);
+      }, 100);
+    }
+  }, [initialFilePath, events]);
+
+  const props: PanelComponentProps = { context, actions, events };
+  return (
+    <div style={{ height: '100%', width: '100%' }}>
+      <MDXEditorPanel {...props} />
+    </div>
+  );
+};
+
+const meta: Meta<typeof MDXEditorPanelWithMocks> = {
   title: 'Panels/MDXEditorPanel',
-  component: MDXEditorPanel,
+  component: MDXEditorPanelWithMocks,
   parameters: {
     layout: 'fullscreen',
   },
@@ -105,85 +136,38 @@ const meta: Meta<typeof MDXEditorPanel> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof MDXEditorPanel>;
+type Story = StoryObj<typeof MDXEditorPanelWithMocks>;
 
 export const ReadmeFile: Story = {
   args: {
-    filePath: '/docs/README.md',
-    contentProvider: createMockContentProvider(mockReadmeContent),
-    onSave: (content) => console.log('Saved:', content.substring(0, 100)),
+    initialFilePath: '/Users/developer/my-project/docs/README.md',
+    initialFiles: {
+      '/Users/developer/my-project/docs/README.md': mockReadmeContent,
+    },
   },
 };
 
 export const BlogPost: Story = {
   args: {
-    filePath: '/blog/getting-started.mdx',
-    contentProvider: createMockContentProvider(mockBlogPostContent),
-    onSave: (content) => console.log('Saved:', content.substring(0, 100)),
-  },
-};
-
-export const WithInitialContent: Story = {
-  args: {
-    initialContent: `# New Document
-
-Start writing your content here...
-
-## Section 1
-
-Add your text.
-
-## Section 2
-
-More content goes here.
-`,
-    onSave: (content) => console.log('Saved:', content.substring(0, 100)),
-  },
-};
-
-export const ReadOnlyMode: Story = {
-  args: {
-    filePath: '/docs/README.md',
-    contentProvider: createMockContentProvider(mockReadmeContent),
-    readOnly: true,
+    initialFilePath: '/Users/developer/my-project/blog/getting-started.mdx',
+    initialFiles: {
+      '/Users/developer/my-project/blog/getting-started.mdx': mockBlogPostContent,
+    },
   },
 };
 
 export const NoFileSelected: Story = {
   args: {
-    filePath: null,
+    initialFilePath: undefined,
   },
 };
 
-export const Loading: Story = {
+export const MultipleMarkdownFiles: Story = {
   args: {
-    filePath: '/docs/README.md',
-    contentProvider: {
-      readFile: () => new Promise<string | null>(() => {}), // Never resolves
-    },
-  },
-};
-
-export const ErrorState: Story = {
-  args: {
-    filePath: '/docs/missing.md',
-    contentProvider: {
-      readFile: async (): Promise<string | null> => {
-        throw new globalThis.Error('File not found');
-      },
-    },
-  },
-};
-
-export const WithImageUpload: Story = {
-  args: {
-    filePath: '/docs/README.md',
-    contentProvider: createMockContentProvider(mockReadmeContent),
-    onImageUpload: async (file) => {
-      console.log('Uploading image:', file.name);
-      // Simulate upload delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      return `https://placekitten.com/400/300?image=${Math.random()}`;
+    initialFilePath: '/Users/developer/my-project/docs/README.md',
+    initialFiles: {
+      '/Users/developer/my-project/docs/README.md': mockReadmeContent,
+      '/Users/developer/my-project/blog/getting-started.mdx': mockBlogPostContent,
     },
   },
 };

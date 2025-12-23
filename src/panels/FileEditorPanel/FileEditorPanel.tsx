@@ -1,23 +1,16 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useTheme } from '@principal-ade/industry-theme';
+import { ThemeProvider, useTheme } from '@principal-ade/industry-theme';
 import { ThemedMonacoWithProvider } from '@principal-ade/industry-themed-monaco-editor';
 import { FileText, X } from 'lucide-react';
 
-import type { FileContentProvider, FileSource } from '../../types';
+import type { PanelComponentProps, ActiveFileSlice } from '../../types';
 
-export interface FileEditorPanelProps {
-  /** Path to the file being edited */
-  filePath: string | null;
-  /** File source information (local vs remote) */
-  source?: FileSource | null;
-  /** Provider for file operations */
-  contentProvider: FileContentProvider;
-  /** Called when close button is clicked */
-  onClose?: () => void;
-  /** Force read-only mode */
-  readOnly?: boolean;
-  /** Enable vim mode */
+/**
+ * User preferences slice shape
+ */
+interface UserPreferences {
   vimMode?: boolean;
+  // other preferences...
 }
 
 const getLanguage = (path: string): string => {
@@ -61,15 +54,16 @@ const getLanguage = (path: string): string => {
   return languageMap[ext] || 'plaintext';
 };
 
-export const FileEditorPanel: React.FC<FileEditorPanelProps> = ({
-  filePath,
-  source,
-  contentProvider,
-  onClose,
-  readOnly: forceReadOnly = false,
-  vimMode = false,
+/**
+ * FileEditorPanelContent - Internal component that uses theme
+ */
+const FileEditorPanelContent: React.FC<PanelComponentProps> = ({
+  context,
+  actions: _actions,
+  events,
 }) => {
   const { theme } = useTheme();
+  const [filePath, setFilePath] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
   const [editorContent, setEditorContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
@@ -80,6 +74,17 @@ export const FileEditorPanel: React.FC<FileEditorPanelProps> = ({
   const latestFilePathRef = useRef<string | null>(null);
   const isSavingRef = useRef(false);
   const isDirtyRef = useRef(false);
+
+  // Get file system adapter from context
+  const fileSystem = context.adapters?.fileSystem;
+  const isEditable = Boolean(fileSystem?.writeFile);
+
+  // Get active file from context slice
+  const activeFileSlice = context.getSlice<ActiveFileSlice>('active-file');
+
+  // Get user preferences (vim mode, etc.)
+  const preferencesSlice = context.getSlice<UserPreferences>('preferences');
+  const vimMode = preferencesSlice?.data?.vimMode ?? false;
 
   useEffect(() => {
     isDirtyRef.current = isDirty;
@@ -93,13 +98,26 @@ export const FileEditorPanel: React.FC<FileEditorPanelProps> = ({
     setSaveError(null);
   }, [filePath]);
 
-  // Determine if this is a local file that supports editing
-  const isLocalFile = source?.type === 'local';
-  const isEditable =
-    isLocalFile && !forceReadOnly && !!contentProvider.writeFile;
+  // Sync with active-file slice
+  useEffect(() => {
+    if (activeFileSlice?.data?.path) {
+      setFilePath(activeFileSlice.data.path);
+    }
+  }, [activeFileSlice?.data?.path]);
+
+  // Listen for file:open events
+  useEffect(() => {
+    const unsubscribe = events.on('file:open', (event) => {
+      const payload = event.payload as { path: string };
+      if (payload?.path) {
+        setFilePath(payload.path);
+      }
+    });
+    return unsubscribe;
+  }, [events]);
 
   const loadFile = useCallback(async () => {
-    if (!filePath) {
+    if (!filePath || !fileSystem?.readFile) {
       latestFilePathRef.current = null;
       setFileContent('');
       setEditorContent('');
@@ -114,7 +132,7 @@ export const FileEditorPanel: React.FC<FileEditorPanelProps> = ({
     setError(null);
 
     try {
-      const content = await contentProvider.readFile(filePath);
+      const content = await fileSystem.readFile(filePath);
 
       if (latestFilePathRef.current !== filePath) {
         return;
@@ -141,26 +159,11 @@ export const FileEditorPanel: React.FC<FileEditorPanelProps> = ({
         setIsLoading(false);
       }
     }
-  }, [filePath, contentProvider]);
+  }, [filePath, fileSystem]);
 
   useEffect(() => {
     loadFile();
   }, [loadFile]);
-
-  // File watching support
-  useEffect(() => {
-    if (!filePath || !isLocalFile || !contentProvider.watchFile) {
-      return;
-    }
-
-    const unwatch = contentProvider.watchFile(filePath, () => {
-      if (!isSavingRef.current) {
-        loadFile();
-      }
-    });
-
-    return unwatch;
-  }, [filePath, isLocalFile, contentProvider, loadFile]);
 
   const handleEditorChange = useCallback(
     (value?: string) => {
@@ -176,7 +179,7 @@ export const FileEditorPanel: React.FC<FileEditorPanelProps> = ({
 
   const handleEditorSave = useCallback(
     async (value?: string) => {
-      if (!filePath || !contentProvider.writeFile) {
+      if (!filePath || !fileSystem?.writeFile) {
         return;
       }
 
@@ -191,12 +194,20 @@ export const FileEditorPanel: React.FC<FileEditorPanelProps> = ({
       setSaveError(null);
 
       try {
-        await contentProvider.writeFile(filePath, contentToSave);
+        await fileSystem.writeFile(filePath, contentToSave);
 
         if (latestFilePathRef.current === filePath) {
           setFileContent(contentToSave);
           setEditorContent(contentToSave);
           setIsDirty(false);
+
+          // Emit file:save event
+          events.emit({
+            type: 'file:save',
+            source: 'industry-theme.file-editor',
+            timestamp: Date.now(),
+            payload: { path: filePath },
+          });
         }
       } catch (err) {
         if (latestFilePathRef.current === filePath) {
@@ -211,8 +222,18 @@ export const FileEditorPanel: React.FC<FileEditorPanelProps> = ({
         isSavingRef.current = false;
       }
     },
-    [editorContent, fileContent, filePath, isDirty, contentProvider]
+    [editorContent, fileContent, filePath, isDirty, fileSystem, events]
   );
+
+  const handleClose = useCallback(() => {
+    events.emit({
+      type: 'file:close',
+      source: 'industry-theme.file-editor',
+      timestamp: Date.now(),
+      payload: { path: filePath },
+    });
+    setFilePath(null);
+  }, [events, filePath]);
 
   const fileName = filePath?.split('/').pop() || filePath || '';
   const language = filePath ? getLanguage(filePath) : 'plaintext';
@@ -229,6 +250,7 @@ export const FileEditorPanel: React.FC<FileEditorPanelProps> = ({
           color: theme.colors.textSecondary,
           padding: '20px',
           textAlign: 'center',
+          fontFamily: theme.fonts.body,
         }}
       >
         <FileText size={48} style={{ marginBottom: '16px', opacity: 0.5 }} />
@@ -261,12 +283,16 @@ export const FileEditorPanel: React.FC<FileEditorPanelProps> = ({
       {/* Header */}
       <div
         style={{
-          padding: '12px 16px',
+          height: '40px',
+          padding: '0 12px',
           borderBottom: `1px solid ${theme.colors.border}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           backgroundColor: theme.colors.backgroundSecondary,
+          fontFamily: theme.fonts.body,
+          flexShrink: 0,
+          boxSizing: 'border-box',
         }}
       >
         <div
@@ -282,31 +308,18 @@ export const FileEditorPanel: React.FC<FileEditorPanelProps> = ({
             size={16}
             style={{ color: theme.colors.primary, flexShrink: 0 }}
           />
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div
-              style={{
-                fontSize: theme.fontSizes[2],
-                fontWeight: 600,
-                color: theme.colors.text,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {fileName}
-            </div>
-            <div
-              style={{
-                fontSize: theme.fontSizes[0],
-                color: theme.colors.textSecondary,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-              title={filePath}
-            >
-              {filePath}
-            </div>
+          <div
+            style={{
+              fontSize: theme.fontSizes[2],
+              fontWeight: 600,
+              color: theme.colors.text,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+            title={filePath}
+          >
+            {fileName}
           </div>
         </div>
         <div
@@ -374,9 +387,9 @@ export const FileEditorPanel: React.FC<FileEditorPanelProps> = ({
               </button>
             </>
           )}
-          {onClose && filePath && (
+          {filePath && (
             <button
-              onClick={onClose}
+              onClick={handleClose}
               style={{
                 background: 'none',
                 border: 'none',
@@ -413,6 +426,7 @@ export const FileEditorPanel: React.FC<FileEditorPanelProps> = ({
               alignItems: 'center',
               justifyContent: 'center',
               color: theme.colors.textSecondary,
+              fontFamily: theme.fonts.body,
             }}
           >
             Loading file...
@@ -427,6 +441,7 @@ export const FileEditorPanel: React.FC<FileEditorPanelProps> = ({
               color: theme.colors.error,
               padding: '20px',
               textAlign: 'center',
+              fontFamily: theme.fonts.body,
             }}
           >
             Error: {error}
@@ -461,6 +476,23 @@ export const FileEditorPanel: React.FC<FileEditorPanelProps> = ({
         )}
       </div>
     </div>
+  );
+};
+
+/**
+ * FileEditorPanel - Monaco-based code editor with vim mode support.
+ *
+ * This panel provides:
+ * - Syntax highlighting for many languages
+ * - File editing with save support
+ * - Dirty state tracking
+ * - Integration with panel framework events
+ */
+export const FileEditorPanel: React.FC<PanelComponentProps> = (props) => {
+  return (
+    <ThemeProvider>
+      <FileEditorPanelContent {...props} />
+    </ThemeProvider>
   );
 };
 

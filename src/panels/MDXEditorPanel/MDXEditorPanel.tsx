@@ -26,42 +26,34 @@ import {
   DiffSourceToggleWrapper,
 } from '@mdxeditor/editor';
 import { ThemedMDXEditorWithProvider } from '@principal-ade/industry-themed-mdx-editor';
-import { useTheme } from '@principal-ade/industry-theme';
+import { ThemeProvider, useTheme } from '@principal-ade/industry-theme';
 import { FileText } from 'lucide-react';
 
-import type { FileContentProvider } from '../../types';
+import type { PanelComponentProps, ActiveFileSlice } from '../../types';
 
-export interface MDXEditorPanelProps {
-  /** Path to the markdown file */
-  filePath?: string | null;
-  /** Initial content if no file is loaded */
-  initialContent?: string;
-  /** Provider for file operations */
-  contentProvider?: FileContentProvider;
-  /** Called when content is saved */
-  onSave?: (content: string) => void;
-  /** Force read-only mode */
-  readOnly?: boolean;
-  /** Image upload handler */
-  onImageUpload?: (file: File) => Promise<string>;
-}
-
-export const MDXEditorPanel: React.FC<MDXEditorPanelProps> = ({
-  filePath,
-  initialContent = '# Welcome to MDXEditor\n\nStart editing your markdown content here...',
-  contentProvider,
-  onSave,
-  readOnly = false,
-  onImageUpload,
+/**
+ * MDXEditorPanelContent - Internal component that uses theme
+ */
+const MDXEditorPanelContent: React.FC<PanelComponentProps> = ({
+  context,
+  actions: _actions,
+  events,
 }) => {
   const { theme } = useTheme();
-  const [markdown, setMarkdown] = useState(initialContent);
+  const [filePath, setFilePath] = useState<string | null>(null);
+  const [markdown, setMarkdown] = useState('');
   const [isMounted, setIsMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [currentFilePath, setCurrentFilePath] = useState<string | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
-  const [isDirty, setIsDirty] = useState<boolean>(false);
+  const [_isDirty, setIsDirty] = useState<boolean>(false);
+
+  // Get file system adapter from context
+  const fileSystem = context.adapters?.fileSystem;
+  const isEditable = Boolean(fileSystem?.writeFile);
+
+  // Get active file from context slice
+  const activeFileSlice = context.getSlice<ActiveFileSlice>('active-file');
 
   // Memoize plugins array for performance
   const plugins = useMemo(
@@ -74,12 +66,10 @@ export const MDXEditorPanel: React.FC<MDXEditorPanelProps> = ({
       linkPlugin(),
       linkDialogPlugin(),
       imagePlugin({
-        imageUploadHandler:
-          onImageUpload ??
-          (async (file) => {
-            console.log('Image upload not configured:', file.name);
-            return '/placeholder-image.png';
-          }),
+        imageUploadHandler: async (file) => {
+          console.warn('Image upload not configured:', file.name);
+          return '/placeholder-image.png';
+        },
       }),
       tablePlugin(),
       codeBlockPlugin({ defaultCodeBlockLanguage: 'javascript' }),
@@ -127,45 +117,51 @@ export const MDXEditorPanel: React.FC<MDXEditorPanelProps> = ({
         ),
       }),
     ],
-    [parseError, onImageUpload]
+    [parseError]
   );
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // Load file content if filePath is provided
+  // Sync with active-file slice (only for markdown files)
+  useEffect(() => {
+    const path = activeFileSlice?.data?.path;
+    if (path && (path.endsWith('.md') || path.endsWith('.mdx'))) {
+      setFilePath(path);
+    }
+  }, [activeFileSlice?.data?.path]);
+
+  // Listen for file:open events (only handle markdown files)
+  useEffect(() => {
+    const unsubscribe = events.on('file:open', (event) => {
+      const payload = event.payload as { path: string };
+      if (payload?.path) {
+        const path = payload.path;
+        if (path.endsWith('.md') || path.endsWith('.mdx')) {
+          setFilePath(path);
+        }
+      }
+    });
+    return unsubscribe;
+  }, [events]);
+
+  // Load file content when filePath changes
   useEffect(() => {
     const loadFileContent = async () => {
-      if (!filePath || !contentProvider) {
-        setMarkdown(initialContent);
-        setCurrentFilePath(null);
+      if (!filePath || !fileSystem?.readFile) {
+        setMarkdown('');
         return;
-      }
-
-      if (filePath === currentFilePath) {
-        return;
-      }
-
-      // Auto-save current file before loading new one
-      if (currentFilePath && isDirty && contentProvider.writeFile) {
-        try {
-          await contentProvider.writeFile(currentFilePath, markdown);
-          console.log('Auto-saved before loading new file:', currentFilePath);
-        } catch (error) {
-          console.error('Failed to auto-save before loading new file:', error);
-        }
       }
 
       setIsLoading(true);
       setLoadError(null);
 
       try {
-        const content = await contentProvider.readFile(filePath);
+        const content = await fileSystem.readFile(filePath);
 
         if (content !== null) {
           setMarkdown(content);
-          setCurrentFilePath(filePath);
           setParseError(null);
           setIsDirty(false);
         } else {
@@ -174,7 +170,7 @@ export const MDXEditorPanel: React.FC<MDXEditorPanelProps> = ({
       } catch (error) {
         console.error('Error loading file:', error);
         setLoadError(`Failed to load file: ${filePath}`);
-        setMarkdown(initialContent);
+        setMarkdown('');
         setParseError(null);
       } finally {
         setIsLoading(false);
@@ -182,30 +178,7 @@ export const MDXEditorPanel: React.FC<MDXEditorPanelProps> = ({
     };
 
     loadFileContent();
-  }, [
-    filePath,
-    contentProvider,
-    initialContent,
-    currentFilePath,
-    isDirty,
-    markdown,
-  ]);
-
-  // Auto-save on component unmount
-  useEffect(() => {
-    return () => {
-      if (currentFilePath && isDirty && contentProvider?.writeFile) {
-        contentProvider
-          .writeFile(currentFilePath, markdown)
-          .then(() => {
-            console.log('Auto-saved on unmount:', currentFilePath);
-          })
-          .catch((error) => {
-            console.error('Failed to auto-save on unmount:', error);
-          });
-      }
-    };
-  }, [currentFilePath, isDirty, markdown, contentProvider]);
+  }, [filePath, fileSystem]);
 
   const handleChange = useCallback((value: string) => {
     setMarkdown(value);
@@ -216,21 +189,24 @@ export const MDXEditorPanel: React.FC<MDXEditorPanelProps> = ({
     async (content?: string) => {
       const contentToSave = content || markdown;
 
-      if (onSave) {
-        onSave(contentToSave);
-      }
-
-      if (currentFilePath && contentProvider?.writeFile) {
+      if (filePath && fileSystem?.writeFile) {
         try {
-          await contentProvider.writeFile(currentFilePath, contentToSave);
-          console.log('File saved successfully:', currentFilePath);
+          await fileSystem.writeFile(filePath, contentToSave);
           setIsDirty(false);
+
+          // Emit file:save event
+          events.emit({
+            type: 'file:save',
+            source: 'industry-theme.mdx-editor',
+            timestamp: Date.now(),
+            payload: { path: filePath },
+          });
         } catch (error) {
           console.error('Error saving file:', error);
         }
       }
     },
-    [markdown, onSave, currentFilePath, contentProvider]
+    [markdown, filePath, fileSystem, events]
   );
 
   if (!isMounted) {
@@ -242,6 +218,7 @@ export const MDXEditorPanel: React.FC<MDXEditorPanelProps> = ({
           justifyContent: 'center',
           height: '100%',
           color: theme.colors.text,
+          fontFamily: theme.fonts.body,
         }}
       >
         Loading editor...
@@ -258,6 +235,7 @@ export const MDXEditorPanel: React.FC<MDXEditorPanelProps> = ({
           justifyContent: 'center',
           height: '100%',
           color: theme.colors.text,
+          fontFamily: theme.fonts.body,
         }}
       >
         Loading file...
@@ -277,6 +255,7 @@ export const MDXEditorPanel: React.FC<MDXEditorPanelProps> = ({
           color: theme.colors.error,
           padding: '20px',
           textAlign: 'center',
+          fontFamily: theme.fonts.body,
         }}
       >
         <div style={{ marginBottom: '10px' }}>Warning</div>
@@ -285,7 +264,7 @@ export const MDXEditorPanel: React.FC<MDXEditorPanelProps> = ({
     );
   }
 
-  if (!filePath && !initialContent) {
+  if (!filePath) {
     return (
       <div
         style={{
@@ -297,6 +276,7 @@ export const MDXEditorPanel: React.FC<MDXEditorPanelProps> = ({
           color: theme.colors.textSecondary,
           padding: '40px',
           textAlign: 'center',
+          fontFamily: theme.fonts.body,
         }}
       >
         <FileText size={48} style={{ marginBottom: '16px', opacity: 0.5 }} />
@@ -334,16 +314,16 @@ export const MDXEditorPanel: React.FC<MDXEditorPanelProps> = ({
       }}
     >
       <ThemedMDXEditorWithProvider
-        key={currentFilePath || 'default'}
+        key={filePath || 'default'}
         markdown={safeMarkdown}
         onSave={async (content) => {
           await handleSave(content);
         }}
         onChange={handleChange}
         onDirtyChange={setIsDirty}
-        readOnly={readOnly}
-        filePath={currentFilePath || undefined}
-        enableSaveShortcut={!readOnly}
+        readOnly={!isEditable}
+        filePath={filePath || undefined}
+        enableSaveShortcut={isEditable}
         hideStatusBar={false}
         documentPadding={{ left: 32, right: 32, top: 0, bottom: 32 }}
         onError={(error) => {
@@ -393,6 +373,23 @@ export const MDXEditorPanel: React.FC<MDXEditorPanelProps> = ({
   }
 
   return editorContent;
+};
+
+/**
+ * MDXEditorPanel - Rich markdown/MDX editor.
+ *
+ * This panel provides:
+ * - WYSIWYG markdown editing
+ * - Code block support with syntax highlighting
+ * - Image and table insertion
+ * - Source mode for raw markdown editing
+ */
+export const MDXEditorPanel: React.FC<PanelComponentProps> = (props) => {
+  return (
+    <ThemeProvider>
+      <MDXEditorPanelContent {...props} />
+    </ThemeProvider>
+  );
 };
 
 export const MDXEditorPanelPreview: React.FC = () => {

@@ -11,6 +11,60 @@ import type {
 } from '../types';
 
 /**
+ * Create a mock file system adapter for Storybook
+ * Stores files in memory and logs operations
+ */
+export const createMockFileSystemAdapter = (
+  initialFiles?: Record<string, string>
+) => {
+  const files = new Map<string, string>(Object.entries(initialFiles || {}));
+
+  return {
+    exists: async (path: string) => files.has(path),
+    readFile: async (path: string) => {
+      const content = files.get(path);
+      if (content === undefined) throw new Error(`File not found: ${path}`);
+      return content;
+    },
+    writeFile: async (path: string, content: string) => {
+      // eslint-disable-next-line no-console
+      console.log('[Mock FS] Writing file:', path);
+      files.set(path, content);
+    },
+    deleteFile: async (path: string) => {
+      // eslint-disable-next-line no-console
+      console.log('[Mock FS] Deleting file:', path);
+      files.delete(path);
+    },
+    createDir: async (path: string) => {
+      // eslint-disable-next-line no-console
+      console.log('[Mock FS] Creating directory:', path);
+    },
+    readDir: async (path: string) => {
+      const prefix = path.endsWith('/') ? path : path + '/';
+      const entries = new Set<string>();
+      for (const key of files.keys()) {
+        if (key.startsWith(prefix)) {
+          const rest = key.slice(prefix.length);
+          const firstSegment = rest.split('/')[0];
+          if (firstSegment) entries.add(firstSegment);
+        }
+      }
+      return Array.from(entries);
+    },
+    isDirectory: async (path: string) => {
+      const prefix = path.endsWith('/') ? path : path + '/';
+      for (const key of files.keys()) {
+        if (key.startsWith(prefix)) return true;
+      }
+      return false;
+    },
+    // Expose the internal files map for testing
+    _files: files,
+  };
+};
+
+/**
  * Mock Git Status data for Storybook
  */
 const mockGitStatusData = {
@@ -18,6 +72,55 @@ const mockGitStatusData = {
   unstaged: ['README.md', 'package.json'],
   untracked: ['src/new-feature.tsx'],
   deleted: [],
+};
+
+/**
+ * Sample file content for mock file system
+ */
+const mockFileContent: Record<string, string> = {
+  '/Users/developer/my-project/src/index.ts': `import { greet } from './utils';
+
+export function main() {
+  console.log(greet('World'));
+}
+
+main();
+`,
+  '/Users/developer/my-project/src/utils.ts': `export function greet(name: string): string {
+  return \`Hello, \${name}!\`;
+}
+
+export function add(a: number, b: number): number {
+  return a + b;
+}
+`,
+  '/Users/developer/my-project/README.md': `# My Project
+
+A sample project for testing the file editor panel.
+
+## Features
+
+- Feature 1
+- Feature 2
+- Feature 3
+
+## Getting Started
+
+\`\`\`bash
+npm install
+npm run dev
+\`\`\`
+`,
+  '/Users/developer/my-project/package.json': `{
+  "name": "my-project",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "build": "tsc"
+  }
+}
+`,
 };
 
 /**
@@ -43,11 +146,21 @@ const createMockSlice = <T,>(
  * Mock Panel Context for Storybook
  */
 export const createMockContext = (
-  overrides?: Partial<PanelContextValue>
+  overrides?: Partial<PanelContextValue>,
+  initialFiles?: Record<string, string>,
+  options?: { vimMode?: boolean }
 ): PanelContextValue => {
   // Create mock data slices
   const mockSlices = new Map<string, DataSlice>([
     ['git', createMockSlice('git', mockGitStatusData)],
+    [
+      'active-file',
+      createMockSlice('active-file', null),
+    ],
+    [
+      'preferences',
+      createMockSlice('preferences', { vimMode: options?.vimMode ?? false }),
+    ],
     [
       'markdown',
       createMockSlice('markdown', [
@@ -74,10 +187,27 @@ export const createMockContext = (
             name: 'src',
             path: '/Users/developer/my-project/src',
             type: 'directory',
+            children: [
+              {
+                name: 'index.ts',
+                path: '/Users/developer/my-project/src/index.ts',
+                type: 'file',
+              },
+              {
+                name: 'utils.ts',
+                path: '/Users/developer/my-project/src/utils.ts',
+                type: 'file',
+              },
+            ],
           },
           {
             name: 'package.json',
             path: '/Users/developer/my-project/package.json',
+            type: 'file',
+          },
+          {
+            name: 'README.md',
+            path: '/Users/developer/my-project/README.md',
             type: 'file',
           },
         ],
@@ -104,6 +234,12 @@ export const createMockContext = (
     ],
   ]);
 
+  // Create mock file system adapter with initial files
+  const mockFileSystem = createMockFileSystemAdapter({
+    ...mockFileContent,
+    ...initialFiles,
+  });
+
   const defaultContext: PanelContextValue = {
     currentScope: {
       type: 'repository',
@@ -117,6 +253,9 @@ export const createMockContext = (
       },
     },
     slices: mockSlices,
+    adapters: {
+      fileSystem: mockFileSystem,
+    },
     getSlice: <T,>(name: string): DataSlice<T> | undefined => {
       return mockSlices.get(name) as DataSlice<T> | undefined;
     },
@@ -235,12 +374,47 @@ export const MockPanelProvider: React.FC<{
   children: (props: PanelComponentProps) => React.ReactNode;
   contextOverrides?: Partial<PanelContextValue>;
   actionsOverrides?: Partial<PanelActions>;
-}> = ({ children, contextOverrides, actionsOverrides }) => {
-  const context = createMockContext(contextOverrides);
+  initialFiles?: Record<string, string>;
+  vimMode?: boolean;
+}> = ({ children, contextOverrides, actionsOverrides, initialFiles, vimMode }) => {
+  const context = createMockContext(contextOverrides, initialFiles, { vimMode });
   const actions = createMockActions(actionsOverrides);
   const events = createMockEvents();
 
   return (
     <ThemeProvider>{children({ context, actions, events })}</ThemeProvider>
   );
+};
+
+/**
+ * Helper to emit a file:open event for testing
+ */
+export const emitFileOpen = (
+  events: PanelEventEmitter,
+  filePath: string
+) => {
+  events.emit({
+    type: 'file:open',
+    source: 'mock',
+    timestamp: Date.now(),
+    payload: { path: filePath },
+  });
+};
+
+/**
+ * Helper to emit a git:diff event for testing
+ */
+export const emitGitDiff = (
+  events: PanelEventEmitter,
+  filePath: string,
+  status: 'staged' | 'unstaged' | 'untracked' | 'deleted',
+  original?: string,
+  modified?: string
+) => {
+  events.emit({
+    type: 'git:diff',
+    source: 'mock',
+    timestamp: Date.now(),
+    payload: { path: filePath, status, original, modified },
+  });
 };
