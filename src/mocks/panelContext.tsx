@@ -1,5 +1,4 @@
 import React from 'react';
-import { ThemeProvider } from '@principal-ade/industry-theme';
 import type {
   PanelComponentProps,
   PanelContextValue,
@@ -368,7 +367,8 @@ export const createMockEvents = (): PanelEventEmitter => {
 
 /**
  * Mock Panel Props Provider
- * Wraps components with mock context and ThemeProvider for Storybook
+ * Wraps components with mock context for Storybook
+ * Note: Assumes ThemeProvider is provided by parent (e.g., Storybook decorator)
  */
 export const MockPanelProvider: React.FC<{
   children: (props: PanelComponentProps) => React.ReactNode;
@@ -381,9 +381,7 @@ export const MockPanelProvider: React.FC<{
   const actions = createMockActions(actionsOverrides);
   const events = createMockEvents();
 
-  return (
-    <ThemeProvider>{children({ context, actions, events })}</ThemeProvider>
-  );
+  return <>{children({ context, actions, events })}</>;
 };
 
 /**

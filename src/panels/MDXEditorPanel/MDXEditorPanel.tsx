@@ -26,7 +26,7 @@ import {
   DiffSourceToggleWrapper,
 } from '@mdxeditor/editor';
 import { ThemedMDXEditorWithProvider } from '@principal-ade/industry-themed-mdx-editor';
-import { ThemeProvider, useTheme } from '@principal-ade/industry-theme';
+import { useTheme } from '@principal-ade/industry-theme';
 import { FileText } from 'lucide-react';
 
 import type { PanelComponentProps, ActiveFileSlice } from '../../types';
@@ -385,11 +385,7 @@ const MDXEditorPanelContent: React.FC<PanelComponentProps> = ({
  * - Source mode for raw markdown editing
  */
 export const MDXEditorPanel: React.FC<PanelComponentProps> = (props) => {
-  return (
-    <ThemeProvider>
-      <MDXEditorPanelContent {...props} />
-    </ThemeProvider>
-  );
+  return <MDXEditorPanelContent {...props} />;
 };
 
 export const MDXEditorPanelPreview: React.FC = () => {

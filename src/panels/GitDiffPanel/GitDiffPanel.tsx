@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ThemeProvider, useTheme } from '@principal-ade/industry-theme';
+import { useTheme } from '@principal-ade/industry-theme';
 import { ThemedMonacoDiffEditor } from '@principal-ade/industry-themed-monaco-editor';
 import { GitCommit, X } from 'lucide-react';
 
@@ -402,11 +402,7 @@ const GitDiffPanelContent: React.FC<PanelComponentProps> = ({
  * - Syntax highlighting based on file type
  */
 export const GitDiffPanel: React.FC<PanelComponentProps> = (props) => {
-  return (
-    <ThemeProvider>
-      <GitDiffPanelContent {...props} />
-    </ThemeProvider>
-  );
+  return <GitDiffPanelContent {...props} />;
 };
 
 export const GitDiffPanelPreview: React.FC = () => {

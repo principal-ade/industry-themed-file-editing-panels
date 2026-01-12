@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ThemeProvider, useTheme } from '@principal-ade/industry-theme';
+import { useTheme } from '@principal-ade/industry-theme';
 import { ThemedMonacoWithProvider } from '@principal-ade/industry-themed-monaco-editor';
 import { FileText, X } from 'lucide-react';
 
@@ -489,11 +489,7 @@ const FileEditorPanelContent: React.FC<PanelComponentProps> = ({
  * - Integration with panel framework events
  */
 export const FileEditorPanel: React.FC<PanelComponentProps> = (props) => {
-  return (
-    <ThemeProvider>
-      <FileEditorPanelContent {...props} />
-    </ThemeProvider>
-  );
+  return <FileEditorPanelContent {...props} />;
 };
 
 export const FileEditorPanelPreview: React.FC = () => {
