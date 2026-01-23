@@ -24,8 +24,9 @@ import {
   ListsToggle,
   BlockTypeSelect,
   DiffSourceToggleWrapper,
-} from '@mdxeditor/editor';
-import { ThemedMDXEditorWithProvider } from '@principal-ade/industry-themed-mdx-editor';
+  ThemedMDXEditor,
+} from '@principal-ai/mdx-editor';
+import '@principal-ai/mdx-editor/style.css';
 import { useTheme } from '@principal-ade/industry-theme';
 import { FileText } from 'lucide-react';
 
@@ -146,6 +147,36 @@ const MDXEditorPanelContent: React.FC<PanelComponentProps> = ({
     return unsubscribe;
   }, [events]);
 
+  const handleChange = useCallback((value: string) => {
+    setMarkdown(value);
+    setIsDirty(true);
+    setParseError(null);
+  }, []);
+
+  const handleSave = useCallback(
+    async (content?: string) => {
+      const contentToSave = content || markdown;
+
+      if (filePath && fileSystem?.writeFile) {
+        try {
+          await fileSystem.writeFile(filePath, contentToSave);
+          setIsDirty(false);
+
+          // Emit file:save event
+          events.emit({
+            type: 'file:save',
+            source: 'industry-theme.mdx-editor',
+            timestamp: Date.now(),
+            payload: { path: filePath },
+          });
+        } catch (error) {
+          console.error('Error saving file:', error);
+        }
+      }
+    },
+    [markdown, filePath, fileSystem, events]
+  );
+
   // Load file content when filePath changes
   useEffect(() => {
     const loadFileContent = async () => {
@@ -180,34 +211,20 @@ const MDXEditorPanelContent: React.FC<PanelComponentProps> = ({
     loadFileContent();
   }, [filePath, fileSystem]);
 
-  const handleChange = useCallback((value: string) => {
-    setMarkdown(value);
-    setParseError(null);
-  }, []);
+  // Handle keyboard shortcuts for save
+  useEffect(() => {
+    if (!isEditable) return;
 
-  const handleSave = useCallback(
-    async (content?: string) => {
-      const contentToSave = content || markdown;
-
-      if (filePath && fileSystem?.writeFile) {
-        try {
-          await fileSystem.writeFile(filePath, contentToSave);
-          setIsDirty(false);
-
-          // Emit file:save event
-          events.emit({
-            type: 'file:save',
-            source: 'industry-theme.mdx-editor',
-            timestamp: Date.now(),
-            payload: { path: filePath },
-          });
-        } catch (error) {
-          console.error('Error saving file:', error);
-        }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        handleSave();
       }
-    },
-    [markdown, filePath, fileSystem, events]
-  );
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isEditable, handleSave]);
 
   if (!isMounted) {
     return (
@@ -313,29 +330,12 @@ const MDXEditorPanelContent: React.FC<PanelComponentProps> = ({
         width: '100%',
       }}
     >
-      <ThemedMDXEditorWithProvider
+      <ThemedMDXEditor
         key={filePath || 'default'}
         markdown={safeMarkdown}
-        onSave={async (content) => {
-          await handleSave(content);
-        }}
         onChange={handleChange}
-        onDirtyChange={setIsDirty}
         readOnly={!isEditable}
-        filePath={filePath || undefined}
-        enableSaveShortcut={isEditable}
-        hideStatusBar={false}
-        documentPadding={{ left: 32, right: 32, top: 0, bottom: 32 }}
-        onError={(error) => {
-          console.error('MDXEditor parsing error:', error);
-          setTimeout(() => {
-            if (error && typeof error === 'object' && 'message' in error) {
-              setParseError(String(error.message));
-            } else {
-              setParseError('Markdown parsing error');
-            }
-          }, 0);
-        }}
+        contentEditableClassName="prose"
         plugins={plugins}
       />
     </div>

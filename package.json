@@ -1,6 +1,6 @@
 {
   "name": "@industry-theme/file-editing-panels",
-  "version": "0.2.2",
+  "version": "0.2.4",
   "description": "Git diff view and editor panels for dev workspaces",
   "type": "module",
   "main": "dist/panels.bundle.js",
@@ -52,9 +52,8 @@
     }
   },
   "dependencies": {
-    "@mdxeditor/editor": "^3.52.0",
+    "@principal-ai/mdx-editor": "^1.0.4",
     "@principal-ade/industry-theme": "^0.1.4",
-    "@principal-ade/industry-themed-mdx-editor": "^0.1.16",
     "@principal-ade/industry-themed-monaco-editor": "^0.1.9",
     "@principal-ade/panel-framework-core": "^0.1.10",
     "@principal-ade/utcp-panel-event": "^0.1.0",

@@ -83,12 +83,38 @@ interface GitDiffPayload {
 }
 
 /**
+ * Extended props for GitDiffPanel with optional prop-controlled mode
+ */
+export interface GitDiffPanelProps extends PanelComponentProps {
+  /**
+   * Optional file path to display diff for.
+   * If provided, this takes precedence over event-based selection.
+   * This allows the host to control panel state via props instead of events.
+   */
+  filePath?: string | null;
+  /**
+   * Optional git status for the file.
+   * Used together with filePath in prop-controlled mode.
+   */
+  gitStatus?: GitChangeStatus;
+  /**
+   * Whether to show the close button in the panel header.
+   * Set to false when using in tabs (where the tab has its own close button).
+   * Defaults to true.
+   */
+  showCloseButton?: boolean;
+}
+
+/**
  * GitDiffPanelContent - Internal component that uses theme
  */
-const GitDiffPanelContent: React.FC<PanelComponentProps> = ({
+const GitDiffPanelContent: React.FC<GitDiffPanelProps> = ({
   context,
   actions: _actions,
   events,
+  filePath: filePathProp,
+  gitStatus: gitStatusProp,
+  showCloseButton = true,
 }) => {
   const { theme } = useTheme();
   const [filePath, setFilePath] = useState<string | null>(null);
@@ -103,8 +129,22 @@ const GitDiffPanelContent: React.FC<PanelComponentProps> = ({
   // Get file system adapter from context
   const fileSystem = context.adapters?.fileSystem;
 
-  // Listen for git:diff events
+  // Prop-controlled mode: when filePath prop is provided, it takes precedence
   useEffect(() => {
+    if (filePathProp) {
+      console.log('[GitDiffPanel] Using prop-controlled file path:', filePathProp);
+      setFilePath(filePathProp);
+      setStatus(gitStatusProp || 'unstaged');
+    }
+  }, [filePathProp, gitStatusProp]);
+
+  // Listen for git:diff events (only when not prop-controlled)
+  useEffect(() => {
+    if (filePathProp) {
+      // In prop-controlled mode, ignore events
+      return undefined;
+    }
+
     const unsubscribe = events.on('git:diff', (event) => {
       const payload = event.payload as GitDiffPayload;
       if (payload?.path) {
@@ -120,7 +160,7 @@ const GitDiffPanelContent: React.FC<PanelComponentProps> = ({
       }
     });
     return unsubscribe;
-  }, [events]);
+  }, [events, filePathProp]);
 
   // Load diff content when file path changes
   useEffect(() => {
@@ -296,31 +336,33 @@ const GitDiffPanelContent: React.FC<PanelComponentProps> = ({
             </span>
           )}
         </div>
-        <button
-          onClick={handleClose}
-          style={{
-            background: 'none',
-            border: 'none',
-            padding: '4px',
-            cursor: 'pointer',
-            color: theme.colors.textSecondary,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: '4px',
-            transition: 'background-color 0.2s',
-            flexShrink: 0,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor =
-              theme.colors.backgroundTertiary;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-          }}
-        >
-          <X size={16} />
-        </button>
+        {showCloseButton && (
+          <button
+            onClick={handleClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: '4px',
+              cursor: 'pointer',
+              color: theme.colors.textSecondary,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '4px',
+              transition: 'background-color 0.2s',
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor =
+                theme.colors.backgroundTertiary;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>
         {isLoading ? (
@@ -401,7 +443,7 @@ const GitDiffPanelContent: React.FC<PanelComponentProps> = ({
  * - Status indicators for staged/unstaged/untracked/deleted files
  * - Syntax highlighting based on file type
  */
-export const GitDiffPanel: React.FC<PanelComponentProps> = (props) => {
+export const GitDiffPanel: React.FC<GitDiffPanelProps> = (props) => {
   return <GitDiffPanelContent {...props} />;
 };
 

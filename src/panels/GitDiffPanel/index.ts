@@ -1,1 +1,1 @@
-export { GitDiffPanel, GitDiffPanelPreview } from './GitDiffPanel';
+export { GitDiffPanel, GitDiffPanelPreview, type GitDiffPanelProps } from './GitDiffPanel';

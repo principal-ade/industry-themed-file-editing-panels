@@ -1,6 +1,6 @@
 import type { Preview } from '@storybook/react-vite';
 import React from 'react';
-import { ThemeProvider } from '@principal-ade/industry-theme';
+import { ThemeProvider, terminalTheme } from '@principal-ade/industry-theme';
 
 const preview: Preview = {
   parameters: {
@@ -25,7 +25,7 @@ const preview: Preview = {
   },
   decorators: [
     (Story) => (
-      <ThemeProvider>
+      <ThemeProvider theme={terminalTheme}>
         <div style={{ height: '100%', width: '100%' }}>
           <Story />
         </div>

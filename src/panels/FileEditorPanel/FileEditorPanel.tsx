@@ -13,6 +13,24 @@ interface UserPreferences {
   // other preferences...
 }
 
+/**
+ * Extended props for FileEditorPanel with optional prop-controlled mode
+ */
+export interface FileEditorPanelProps extends PanelComponentProps {
+  /**
+   * Optional file path to display.
+   * If provided, this takes precedence over event-based selection and context slices.
+   * This allows the host to control panel state via props instead of events.
+   */
+  filePath?: string | null;
+  /**
+   * Whether to show the close button in the panel header.
+   * Set to false when using in tabs (where the tab has its own close button).
+   * Defaults to true.
+   */
+  showCloseButton?: boolean;
+}
+
 const getLanguage = (path: string): string => {
   const ext = path.split('.').pop()?.toLowerCase() || '';
   const languageMap: Record<string, string> = {
@@ -57,10 +75,12 @@ const getLanguage = (path: string): string => {
 /**
  * FileEditorPanelContent - Internal component that uses theme
  */
-const FileEditorPanelContent: React.FC<PanelComponentProps> = ({
+const FileEditorPanelContent: React.FC<FileEditorPanelProps> = ({
   context,
   actions: _actions,
   events,
+  filePath: filePathProp,
+  showCloseButton = true,
 }) => {
   const { theme } = useTheme();
   const [filePath, setFilePath] = useState<string | null>(null);
@@ -98,15 +118,28 @@ const FileEditorPanelContent: React.FC<PanelComponentProps> = ({
     setSaveError(null);
   }, [filePath]);
 
-  // Sync with active-file slice
+  // Prop-controlled mode: when filePath prop is provided, it takes precedence
   useEffect(() => {
-    if (activeFileSlice?.data?.path) {
+    if (filePathProp) {
+      console.log('[FileEditorPanel] Using prop-controlled file path:', filePathProp);
+      setFilePath(filePathProp);
+    }
+  }, [filePathProp]);
+
+  // Sync with active-file slice (only when not prop-controlled)
+  useEffect(() => {
+    if (!filePathProp && activeFileSlice?.data?.path) {
       setFilePath(activeFileSlice.data.path);
     }
-  }, [activeFileSlice?.data?.path]);
+  }, [filePathProp, activeFileSlice?.data?.path]);
 
-  // Listen for file:open events
+  // Listen for file:open events (only when not prop-controlled)
   useEffect(() => {
+    if (filePathProp) {
+      // In prop-controlled mode, ignore events
+      return undefined;
+    }
+
     const unsubscribe = events.on('file:open', (event) => {
       const payload = event.payload as { path: string };
       if (payload?.path) {
@@ -114,7 +147,7 @@ const FileEditorPanelContent: React.FC<PanelComponentProps> = ({
       }
     });
     return unsubscribe;
-  }, [events]);
+  }, [events, filePathProp]);
 
   const loadFile = useCallback(async () => {
     if (!filePath || !fileSystem?.readFile) {
@@ -387,7 +420,7 @@ const FileEditorPanelContent: React.FC<PanelComponentProps> = ({
               </button>
             </>
           )}
-          {filePath && (
+          {filePath && showCloseButton && (
             <button
               onClick={handleClose}
               style={{
@@ -488,7 +521,7 @@ const FileEditorPanelContent: React.FC<PanelComponentProps> = ({
  * - Dirty state tracking
  * - Integration with panel framework events
  */
-export const FileEditorPanel: React.FC<PanelComponentProps> = (props) => {
+export const FileEditorPanel: React.FC<FileEditorPanelProps> = (props) => {
   return <FileEditorPanelContent {...props} />;
 };
 

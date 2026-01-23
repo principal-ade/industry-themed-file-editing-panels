@@ -1,1 +1,1 @@
-export { FileEditorPanel, FileEditorPanelPreview } from './FileEditorPanel';
+export { FileEditorPanel, FileEditorPanelPreview, type FileEditorPanelProps } from './FileEditorPanel';
