@@ -24,21 +24,56 @@ import {
   ListsToggle,
   BlockTypeSelect,
   DiffSourceToggleWrapper,
-  ThemedMDXEditor,
+  MDXEditor,
 } from '@principal-ai/mdx-editor';
 import '@principal-ai/mdx-editor/style.css';
+import './MDXEditorPanel.css';
 import { useTheme } from '@principal-ade/industry-theme';
 import { FileText } from 'lucide-react';
 
-import type { PanelComponentProps, ActiveFileSlice } from '../../types';
+import type { PanelComponentProps, ActiveFileSlice, GitChangeStatus } from '../../types';
+
+/**
+ * Extended props for MDXEditorPanel with optional prop-controlled mode
+ */
+export interface MDXEditorPanelProps extends PanelComponentProps {
+  /**
+   * Optional file path to display.
+   * If provided, this takes precedence over event-based selection and context slices.
+   * This allows the host to control panel state via props instead of events.
+   */
+  filePath?: string | null;
+  /**
+   * Whether to show the close button in the panel header.
+   * Set to false when using in tabs (where the tab has its own close button).
+   * Defaults to true.
+   */
+  showCloseButton?: boolean;
+  /**
+   * Optional git status for the current file.
+   * Useful in tab scenarios where each tab tracks its own git status.
+   * If not provided, the panel will listen for git:diff events.
+   */
+  gitStatus?: GitChangeStatus | null;
+  /**
+   * Optional dirty state for the current file.
+   * If provided, overrides internal dirty tracking.
+   * Useful when parent component manages save state.
+   */
+  isDirty?: boolean;
+}
 
 /**
  * MDXEditorPanelContent - Internal component that uses theme
  */
-const MDXEditorPanelContent: React.FC<PanelComponentProps> = ({
+const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
   context,
   actions: _actions,
   events,
+  filePath: filePathProp,
+  showCloseButton = true,
+  gitStatus: gitStatusProp,
+  isDirty: isDirtyProp,
 }) => {
   const { theme } = useTheme();
   const [filePath, setFilePath] = useState<string | null>(null);
@@ -47,7 +82,12 @@ const MDXEditorPanelContent: React.FC<PanelComponentProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
-  const [_isDirty, setIsDirty] = useState<boolean>(false);
+  const [internalIsDirty, setInternalIsDirty] = useState<boolean>(false);
+  const [internalGitStatus, setInternalGitStatus] = useState<GitChangeStatus | null>(null);
+
+  // Use prop values if provided, otherwise use internal state
+  const _isDirty = isDirtyProp !== undefined ? isDirtyProp : internalIsDirty;
+  const gitStatus = gitStatusProp !== undefined ? gitStatusProp : internalGitStatus;
 
   // Get file system adapter from context
   const fileSystem = context.adapters?.fileSystem;
@@ -116,25 +156,68 @@ const MDXEditorPanelContent: React.FC<PanelComponentProps> = ({
             </DiffSourceToggleWrapper>
           </>
         ),
+        statusContent: () => (
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {_isDirty && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: '#f59e0b'
+                }} />
+                <span style={{ fontSize: '12px', color: theme.colors.textSecondary }}>Unsaved</span>
+              </div>
+            )}
+            {!_isDirty && gitStatus && gitStatus !== 'staged' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: '#3b82f6'
+                }} />
+                <span style={{ fontSize: '12px', color: theme.colors.textSecondary }}>
+                  {gitStatus === 'untracked' ? 'Untracked' : 'Uncommitted'}
+                </span>
+              </div>
+            )}
+          </div>
+        ),
       }),
     ],
-    [parseError]
+    [parseError, _isDirty, gitStatus, theme]
   );
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // Sync with active-file slice (only for markdown files)
+  // Prop-controlled mode: when filePath prop is provided, it takes precedence
   useEffect(() => {
-    const path = activeFileSlice?.data?.path;
-    if (path && (path.endsWith('.md') || path.endsWith('.mdx'))) {
-      setFilePath(path);
+    if (filePathProp) {
+      console.log('[MDXEditorPanel] Using prop-controlled file path:', filePathProp);
+      setFilePath(filePathProp);
     }
-  }, [activeFileSlice?.data?.path]);
+  }, [filePathProp]);
 
-  // Listen for file:open events (only handle markdown files)
+  // Sync with active-file slice (only for markdown files, only when not prop-controlled)
   useEffect(() => {
+    if (!filePathProp) {
+      const path = activeFileSlice?.data?.path;
+      if (path && (path.endsWith('.md') || path.endsWith('.mdx'))) {
+        setFilePath(path);
+      }
+    }
+  }, [filePathProp, activeFileSlice?.data?.path]);
+
+  // Listen for file:open events (only handle markdown files, only when not prop-controlled)
+  useEffect(() => {
+    if (filePathProp) {
+      // In prop-controlled mode, ignore events
+      return undefined;
+    }
+
     const unsubscribe = events.on('file:open', (event) => {
       const payload = event.payload as { path: string };
       if (payload?.path) {
@@ -145,13 +228,32 @@ const MDXEditorPanelContent: React.FC<PanelComponentProps> = ({
       }
     });
     return unsubscribe;
-  }, [events]);
+  }, [filePathProp, events]);
+
+  // Listen for git:diff events to track git status (only if not prop-controlled)
+  useEffect(() => {
+    if (gitStatusProp !== undefined) {
+      // Git status is controlled by props, ignore events
+      return undefined;
+    }
+
+    const unsubscribe = events.on('git:diff', (event) => {
+      const payload = event.payload as { path?: string; filePath?: string; status?: GitChangeStatus };
+      const eventPath = payload?.path || payload?.filePath;
+      if (eventPath === filePath && payload.status) {
+        setInternalGitStatus(payload.status);
+      }
+    });
+    return unsubscribe;
+  }, [events, filePath, gitStatusProp]);
 
   const handleChange = useCallback((value: string) => {
     setMarkdown(value);
-    setIsDirty(true);
+    if (isDirtyProp === undefined) {
+      setInternalIsDirty(true);
+    }
     setParseError(null);
-  }, []);
+  }, [isDirtyProp]);
 
   const handleSave = useCallback(
     async (content?: string) => {
@@ -160,7 +262,17 @@ const MDXEditorPanelContent: React.FC<PanelComponentProps> = ({
       if (filePath && fileSystem?.writeFile) {
         try {
           await fileSystem.writeFile(filePath, contentToSave);
-          setIsDirty(false);
+
+          // Update dirty state if not prop-controlled
+          if (isDirtyProp === undefined) {
+            setInternalIsDirty(false);
+          }
+
+          // Update git status if not prop-controlled
+          // File is now saved but uncommitted (if it was previously untracked, keep that status)
+          if (gitStatusProp === undefined && gitStatus !== 'untracked') {
+            setInternalGitStatus('unstaged');
+          }
 
           // Emit file:save event
           events.emit({
@@ -174,7 +286,7 @@ const MDXEditorPanelContent: React.FC<PanelComponentProps> = ({
         }
       }
     },
-    [markdown, filePath, fileSystem, events]
+    [markdown, filePath, fileSystem, events, gitStatus, isDirtyProp, gitStatusProp]
   );
 
   // Load file content when filePath changes
@@ -194,7 +306,9 @@ const MDXEditorPanelContent: React.FC<PanelComponentProps> = ({
         if (content !== null) {
           setMarkdown(content);
           setParseError(null);
-          setIsDirty(false);
+          if (isDirtyProp === undefined) {
+            setInternalIsDirty(false);
+          }
         } else {
           throw new Error('Failed to read file');
         }
@@ -209,7 +323,7 @@ const MDXEditorPanelContent: React.FC<PanelComponentProps> = ({
     };
 
     loadFileContent();
-  }, [filePath, fileSystem]);
+  }, [filePath, fileSystem, isDirtyProp]);
 
   // Handle keyboard shortcuts for save
   useEffect(() => {
@@ -325,12 +439,16 @@ const MDXEditorPanelContent: React.FC<PanelComponentProps> = ({
 
   const editorContent = (
     <div
+      className="dark-theme mdx-editor-wrapper"
       style={{
         height: '100%',
         width: '100%',
+        backgroundColor: theme.colors.background,
+        color: theme.colors.text,
+        overflow: 'auto',
       }}
     >
-      <ThemedMDXEditor
+      <MDXEditor
         key={filePath || 'default'}
         markdown={safeMarkdown}
         onChange={handleChange}
@@ -384,7 +502,7 @@ const MDXEditorPanelContent: React.FC<PanelComponentProps> = ({
  * - Image and table insertion
  * - Source mode for raw markdown editing
  */
-export const MDXEditorPanel: React.FC<PanelComponentProps> = (props) => {
+export const MDXEditorPanel: React.FC<MDXEditorPanelProps> = (props) => {
   return <MDXEditorPanelContent {...props} />;
 };
 

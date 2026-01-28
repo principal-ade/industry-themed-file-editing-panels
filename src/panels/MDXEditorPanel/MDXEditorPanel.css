@@ -1,0 +1,99 @@
+/* Override Tailwind's preflight heading resets for MDX editor */
+.mdx-editor-wrapper h1 {
+  font-size: 2em;
+  font-weight: 700;
+  margin-top: 0.67em;
+  margin-bottom: 0.67em;
+}
+
+.mdx-editor-wrapper h2 {
+  font-size: 1.5em;
+  font-weight: 700;
+  margin-top: 0.83em;
+  margin-bottom: 0.83em;
+}
+
+.mdx-editor-wrapper h3 {
+  font-size: 1.17em;
+  font-weight: 700;
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+
+.mdx-editor-wrapper h4 {
+  font-size: 1em;
+  font-weight: 700;
+  margin-top: 1.33em;
+  margin-bottom: 1.33em;
+}
+
+.mdx-editor-wrapper h5 {
+  font-size: 0.83em;
+  font-weight: 700;
+  margin-top: 1.67em;
+  margin-bottom: 1.67em;
+}
+
+.mdx-editor-wrapper h6 {
+  font-size: 0.67em;
+  font-weight: 700;
+  margin-top: 2.33em;
+  margin-bottom: 2.33em;
+}
+
+/* Restore other common element styles that Tailwind resets */
+.mdx-editor-wrapper p {
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+
+.mdx-editor-wrapper ul,
+.mdx-editor-wrapper ol {
+  margin-top: 1em;
+  margin-bottom: 1em;
+  padding-left: 2em;
+}
+
+.mdx-editor-wrapper ul {
+  list-style-type: disc;
+}
+
+.mdx-editor-wrapper ol {
+  list-style-type: decimal;
+}
+
+.mdx-editor-wrapper li {
+  display: list-item;
+}
+
+.mdx-editor-wrapper blockquote {
+  margin-top: 1em;
+  margin-bottom: 1em;
+  margin-left: 2em;
+  margin-right: 2em;
+}
+
+.mdx-editor-wrapper pre {
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+
+.mdx-editor-wrapper strong,
+.mdx-editor-wrapper b {
+  font-weight: 700;
+}
+
+.mdx-editor-wrapper em,
+.mdx-editor-wrapper i {
+  font-style: italic;
+}
+
+.mdx-editor-wrapper code {
+  font-family: monospace;
+}
+
+.mdx-editor-wrapper hr {
+  margin-top: 1em;
+  margin-bottom: 1em;
+  border-top: 1px solid;
+}
