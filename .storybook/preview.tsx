@@ -1,6 +1,7 @@
 import type { Preview } from '@storybook/react-vite';
 import React from 'react';
 import { ThemeProvider, terminalTheme } from '@principal-ade/industry-theme';
+import '@principal-ai/mdx-editor/style.css';
 
 const preview: Preview = {
   parameters: {
