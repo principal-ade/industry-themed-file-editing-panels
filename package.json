@@ -1,6 +1,6 @@
 {
   "name": "@industry-theme/file-editing-panels",
-  "version": "0.3.15",
+  "version": "0.3.16",
   "description": "Git diff view and editor panels for dev workspaces",
   "type": "module",
   "main": "dist/panels.bundle.js",
