@@ -80,7 +80,7 @@ const FileEditorPanelContent: React.FC<FileEditorPanelProps> = ({
   actions: _actions,
   events,
   filePath: filePathProp,
-  showCloseButton = true,
+  showCloseButton = false,
 }) => {
   const { theme } = useTheme();
   const [filePath, setFilePath] = useState<string | null>(null);

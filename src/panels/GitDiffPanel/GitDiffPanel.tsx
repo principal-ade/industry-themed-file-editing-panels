@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTheme } from '@principal-ade/industry-theme';
-import { ThemedMonacoDiffEditor } from '@principal-ade/industry-themed-monaco-editor';
+import { FileDiff } from '@pierre/diffs/react';
+import { parsePatchFiles } from '@pierre/diffs';
+import type { FileDiffMetadata } from '@pierre/diffs';
+import { createPatch } from 'diff';
 import { GitCommit, X } from 'lucide-react';
 
 import type { PanelComponentProps, GitChangeStatus } from '../../types';
@@ -75,6 +78,70 @@ const languageFromPath = (filePath: string | null): string => {
   return languageMap[ext] ?? 'plaintext';
 };
 
+/**
+ * Generate unified diff format from original and modified content
+ */
+function generateUnifiedDiff({
+  filePath,
+  originalContent,
+  modifiedContent,
+  status,
+}: {
+  filePath: string;
+  originalContent: string;
+  modifiedContent: string;
+  status: GitChangeStatus;
+}): string {
+  // Use the full path for better compatibility with Pierre's parser
+  let patch: string;
+
+  if (status === 'untracked') {
+    patch = createPatch(filePath, '', modifiedContent, '', '');
+  } else if (status === 'deleted') {
+    patch = createPatch(filePath, originalContent, '', '', '');
+  } else {
+    patch = createPatch(filePath, originalContent, modifiedContent, '', '');
+  }
+
+  // Convert index-style diff to git-style diff format that Pierre expects
+  // Replace "Index: filename" header with git-style "diff --git" header
+  patch = patch.replace(/^Index: (.+)$/m, 'diff --git a/$1 b/$1');
+
+  // Update the --- and +++ lines to use a/ and b/ prefixes
+  patch = patch.replace(/^--- (.+)\t.*$/m, '--- a/$1');
+  patch = patch.replace(/^\+\+\+ (.+)\t.*$/m, '+++ b/$1');
+
+  // Remove the equals line
+  patch = patch.replace(/^={67}$/m, '');
+
+  return patch;
+}
+
+/**
+ * Create FileDiffMetadata from original and modified strings
+ */
+function createFileDiffMetadata(
+  filePath: string,
+  originalContent: string,
+  modifiedContent: string,
+  status: GitChangeStatus
+): FileDiffMetadata {
+  const unifiedDiff = generateUnifiedDiff({
+    filePath,
+    originalContent,
+    modifiedContent,
+    status,
+  });
+
+  const parsed = parsePatchFiles(unifiedDiff);
+
+  if (!parsed || parsed.length === 0 || !parsed[0].files || parsed[0].files.length === 0) {
+    throw new Error('Failed to parse diff');
+  }
+
+  return parsed[0].files[0];
+}
+
 interface GitDiffPayload {
   path: string;
   status?: GitChangeStatus;
@@ -114,7 +181,7 @@ const GitDiffPanelContent: React.FC<GitDiffPanelProps> = ({
   events,
   filePath: filePathProp,
   gitStatus: gitStatusProp,
-  showCloseButton = true,
+  showCloseButton = false,
 }) => {
   const { theme } = useTheme();
   const [filePath, setFilePath] = useState<string | null>(null);
@@ -123,6 +190,8 @@ const GitDiffPanelContent: React.FC<GitDiffPanelProps> = ({
   const [modifiedContent, setModifiedContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('unified');
+  const [contentProvidedExternally, setContentProvidedExternally] = useState(false);
 
   const language = useMemo(() => languageFromPath(filePath), [filePath]);
 
@@ -156,6 +225,9 @@ const GitDiffPanelContent: React.FC<GitDiffPanelProps> = ({
           setModifiedContent(payload.modified ?? '');
           setIsLoading(false);
           setError(null);
+          setContentProvidedExternally(true);
+        } else {
+          setContentProvidedExternally(false);
         }
       }
     });
@@ -172,6 +244,11 @@ const GitDiffPanelContent: React.FC<GitDiffPanelProps> = ({
         setModifiedContent('');
         setIsLoading(false);
         setError(null);
+        return;
+      }
+
+      // If content was provided externally (e.g., via events in Storybook), skip file loading
+      if (contentProvidedExternally) {
         return;
       }
 
@@ -220,7 +297,7 @@ const GitDiffPanelContent: React.FC<GitDiffPanelProps> = ({
     return () => {
       isActive = false;
     };
-  }, [filePath, status, fileSystem]);
+  }, [filePath, status, fileSystem, contentProvidedExternally]);
 
   const handleClose = () => {
     events.emit({
@@ -336,6 +413,49 @@ const GitDiffPanelContent: React.FC<GitDiffPanelProps> = ({
             </span>
           )}
         </div>
+        <div
+          style={{
+            display: 'flex',
+            gap: '4px',
+            marginLeft: '8px',
+            flexShrink: 0,
+          }}
+        >
+          <button
+            onClick={() => setDiffStyle('unified')}
+            style={{
+              background: diffStyle === 'unified' ? theme.colors.primary : 'transparent',
+              border: `1px solid ${theme.colors.border}`,
+              padding: '4px 8px',
+              cursor: 'pointer',
+              color: diffStyle === 'unified' ? theme.colors.background : theme.colors.text,
+              fontSize: theme.fontSizes[0],
+              borderRadius: '4px 0 0 4px',
+              fontFamily: theme.fonts.body,
+              transition: 'all 0.2s',
+            }}
+            title="Unified view (stacked)"
+          >
+            Unified
+          </button>
+          <button
+            onClick={() => setDiffStyle('split')}
+            style={{
+              background: diffStyle === 'split' ? theme.colors.primary : 'transparent',
+              border: `1px solid ${theme.colors.border}`,
+              padding: '4px 8px',
+              cursor: 'pointer',
+              color: diffStyle === 'split' ? theme.colors.background : theme.colors.text,
+              fontSize: theme.fontSizes[0],
+              borderRadius: '0 4px 4px 0',
+              fontFamily: theme.fonts.body,
+              transition: 'all 0.2s',
+            }}
+            title="Split view (side-by-side)"
+          >
+            Split
+          </button>
+        </div>
         {showCloseButton && (
           <button
             onClick={handleClose}
@@ -364,7 +484,15 @@ const GitDiffPanelContent: React.FC<GitDiffPanelProps> = ({
           </button>
         )}
       </div>
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflow: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
         {isLoading ? (
           <div
             style={{
@@ -394,41 +522,70 @@ const GitDiffPanelContent: React.FC<GitDiffPanelProps> = ({
             {error}
           </div>
         ) : (
-          <ThemedMonacoDiffEditor
-            theme={theme}
-            original={originalContent}
-            modified={modifiedContent}
-            language={language}
-            height="100%"
-            options={{
-              renderSideBySide: true,
-              readOnly: true,
-              minimap: { enabled: false },
-              automaticLayout: true,
-              renderIndicators: true,
-              renderMarginRevertIcon: true,
-              ignoreTrimWhitespace: false,
-              diffAlgorithm: 'advanced',
-              scrollbar: {
-                useShadows: false,
-                vertical: 'auto',
-                horizontal: 'auto',
-              },
-            }}
-            loadingComponent={
-              <div
-                style={{
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: theme.colors.textSecondary,
-                }}
-              >
-                Preparing diff editor...
-              </div>
+          (() => {
+            // Handle empty files
+            if (!originalContent && !modifiedContent) {
+              return (
+                <div
+                  style={{
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: theme.colors.textSecondary,
+                    fontFamily: theme.fonts.body,
+                  }}
+                >
+                  Empty file
+                </div>
+              );
             }
-          />
+
+            try {
+              const fileDiff = createFileDiffMetadata(
+                filePath!,
+                originalContent,
+                modifiedContent,
+                status
+              );
+
+              return (
+                <div
+                  style={{
+                    height: '100%',
+                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  <FileDiff
+                    fileDiff={fileDiff}
+                    options={{
+                      diffStyle: diffStyle,
+                    }}
+                  />
+                </div>
+              );
+            } catch (error) {
+              return (
+                <div
+                  style={{
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: theme.colors.error,
+                    padding: '20px',
+                    textAlign: 'center',
+                    fontFamily: theme.fonts.body,
+                  }}
+                >
+                  Failed to generate diff:{' '}
+                  {error instanceof Error ? error.message : 'Unknown error'}
+                </div>
+              );
+            }
+          })()
         )}
       </div>
     </div>

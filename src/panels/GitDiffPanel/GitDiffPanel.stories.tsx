@@ -82,7 +82,7 @@ const meta: Meta<typeof GitDiffPanelWithMocks> = {
   },
   decorators: [
     (Story) => (
-      <div style={{ height: '600px', width: '100%' }}>
+      <div style={{ height: '100vh', width: '100%' }}>
         <Story />
       </div>
     ),

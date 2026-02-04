@@ -1,6 +1,6 @@
 {
   "name": "@industry-theme/file-editing-panels",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "description": "Git diff view and editor panels for dev workspaces",
   "type": "module",
   "main": "dist/panels.bundle.js",
@@ -52,11 +52,12 @@
     }
   },
   "dependencies": {
+    "@pierre/diffs": "^1.0.10",
     "@principal-ade/industry-theme": "^0.1.4",
     "@principal-ade/industry-themed-monaco-editor": "^0.1.10",
     "@principal-ade/panel-framework-core": "^0.1.10",
     "@principal-ade/utcp-panel-event": "^0.1.0",
-    "@principal-ai/mdx-editor": "^1.0.9",
+    "@principal-ai/mdx-editor": "^1.1.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.552.0"
   },
@@ -68,6 +69,7 @@
     "@storybook/addon-onboarding": "10.1.2",
     "@storybook/react-vite": "10.1.2",
     "@types/bun": "latest",
+    "@types/diff": "^7.0.2",
     "@types/node": "^22.15.26",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
