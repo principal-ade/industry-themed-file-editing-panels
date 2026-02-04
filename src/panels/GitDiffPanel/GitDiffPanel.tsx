@@ -262,17 +262,34 @@ const GitDiffPanelContent: React.FC<GitDiffPanelProps> = ({
       setError(null);
 
       try {
-        // For now, read the current file content as "modified"
-        // The "original" would need to come from git or be provided via events
+        // Read the current file content as "modified"
         const modified = await fileSystem.readFile(filePath);
 
         if (!isActive) return;
 
         setModifiedContent(modified ?? '');
-        // Original content should be provided via git:diff event payload
-        // or we leave it empty for new files
+
+        // For untracked files, original content is empty
         if (status === 'untracked') {
           setOriginalContent('');
+        } else {
+          // For modified files, try to get the original content from git
+          // Use getFileContentAtRevision if available (from the fileSystem adapter)
+          // Type assertion is needed since this is an optional extension
+          const fsWithGit = fileSystem as any;
+          if (fsWithGit && typeof fsWithGit.getFileContentAtRevision === 'function') {
+            try {
+              const original = await fsWithGit.getFileContentAtRevision(filePath, 'HEAD');
+              if (!isActive) return;
+              setOriginalContent(original ?? '');
+            } catch (gitError) {
+              console.warn('[GitDiffPanel] Failed to get file from git, using empty original:', gitError);
+              setOriginalContent('');
+            }
+          } else {
+            console.warn('[GitDiffPanel] getFileContentAtRevision not available in fileSystem adapter');
+            setOriginalContent('');
+          }
         }
       } catch (err) {
         if (!isActive) return;
