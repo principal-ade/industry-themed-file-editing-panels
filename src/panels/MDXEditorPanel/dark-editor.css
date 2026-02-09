@@ -1,0 +1,98 @@
+/* Define dark colors directly without requiring .dark scope */
+.dark-editor.mdxeditor {
+  /* Tomato dark colors */
+  --tomato-1: #181111;
+  --tomato-2: #1f1513;
+  --tomato-3: #391714;
+  --tomato-4: #4e1511;
+  --tomato-5: #5e1c16;
+  --tomato-6: #6e2920;
+  --tomato-7: #853a2d;
+  --tomato-8: #ac4d39;
+  --tomato-9: #e54d2e;
+  --tomato-10: #ec6142;
+  --tomato-11: #ff9592;
+  --tomato-12: #fbd3cb;
+
+  /* Mauve dark colors */
+  --mauve-1: #121113;
+  --mauve-2: #1a191b;
+  --mauve-3: #232225;
+  --mauve-4: #2b292d;
+  --mauve-5: #323035;
+  --mauve-6: #3c393f;
+  --mauve-7: #49474e;
+  --mauve-8: #625f69;
+  --mauve-9: #6f6d78;
+  --mauve-10: #7c7a85;
+  --mauve-11: #b5b2bc;
+  --mauve-12: #eeeef0;
+
+  /* MDXEditor theme variables */
+  --accentBase: var(--tomato-1);
+  --accentBgSubtle: var(--tomato-2);
+  --accentBg: var(--tomato-3);
+  --accentBgHover: var(--tomato-4);
+  --accentBgActive: var(--tomato-5);
+  --accentLine: var(--tomato-6);
+  --accentBorder: var(--tomato-7);
+  --accentBorderHover: var(--tomato-8);
+  --accentSolid: var(--tomato-9);
+  --accentSolidHover: var(--tomato-10);
+  --accentText: var(--tomato-11);
+  --accentTextContrast: var(--tomato-12);
+
+  --baseBase: var(--mauve-1);
+  --baseBgSubtle: var(--mauve-2);
+  --baseBg: var(--mauve-3);
+  --baseBgHover: var(--mauve-4);
+  --baseBgActive: var(--mauve-5);
+  --baseLine: var(--mauve-6);
+  --baseBorder: var(--mauve-7);
+  --baseBorderHover: var(--mauve-8);
+  --baseSolid: var(--mauve-9);
+  --baseSolidHover: var(--mauve-10);
+  --baseText: var(--mauve-11);
+  --baseTextContrast: var(--mauve-12);
+
+  --admonitionTipBg: #003848;
+  --admonitionTipBorder: #12718e;
+
+  --admonitionInfoBg: #0e3b2d;
+  --admonitionInfoBorder: #23825c;
+
+  --admonitionCautionBg: #3f2200;
+  --admonitionCautionBorder: #a15a2b;
+
+  --admonitionDangerBg: #3d1111;
+  --admonitionDangerBorder: #cd3d3d;
+
+  --admonitionNoteBg: var(--mauve-4);
+  --admonitionNoteBorder: var(--mauve-8);
+
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  color: var(--baseTextContrast);
+  --basePageBg: var(--mauve-1);
+  background: var(--basePageBg);
+}
+
+/* Ensure proper text colors in dark mode */
+.dark-editor.mdxeditor .contentEditable {
+  color: var(--baseTextContrast);
+}
+
+.dark-editor.mdxeditor h1,
+.dark-editor.mdxeditor h2,
+.dark-editor.mdxeditor h3,
+.dark-editor.mdxeditor h4,
+.dark-editor.mdxeditor h5,
+.dark-editor.mdxeditor h6 {
+  color: var(--baseTextContrast);
+}
+
+.dark-editor.mdxeditor p,
+.dark-editor.mdxeditor li {
+  color: var(--baseTextContrast);
+}

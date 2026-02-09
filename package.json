@@ -59,6 +59,7 @@
     "@principal-ade/utcp-panel-event": "^0.1.0",
     "@principal-ai/mdx-editor": "^1.1.0",
     "clsx": "^2.1.1",
+    "cm6-theme-basic-dark": "^0.2.0",
     "lucide-react": "^0.552.0"
   },
   "devDependencies": {

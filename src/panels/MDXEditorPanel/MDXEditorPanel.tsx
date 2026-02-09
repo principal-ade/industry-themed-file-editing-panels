@@ -28,8 +28,10 @@ import {
 } from '@principal-ai/mdx-editor';
 import '@principal-ai/mdx-editor/style.css';
 import './MDXEditorPanel.css';
+import './dark-editor.css';
 import { useTheme } from '@principal-ade/industry-theme';
 import { FileText } from 'lucide-react';
+import { basicDark } from 'cm6-theme-basic-dark';
 
 import type { PanelComponentProps, ActiveFileSlice, GitChangeStatus } from '../../types';
 
@@ -135,10 +137,12 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
           shell: 'Shell',
           sql: 'SQL',
         },
+        codeMirrorExtensions: [basicDark],
       }),
       frontmatterPlugin(),
       diffSourcePlugin({
         viewMode: parseError ? 'source' : 'rich-text',
+        codeMirrorExtensions: [basicDark],
       }),
       toolbarPlugin({
         toolbarContents: () => (
@@ -453,6 +457,7 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
         markdown={safeMarkdown}
         onChange={handleChange}
         readOnly={!isEditable}
+        className="dark-editor"
         contentEditableClassName="prose"
         plugins={plugins}
       />
