@@ -33,12 +33,18 @@ import { useTheme } from '@principal-ade/industry-theme';
 import { FileText } from 'lucide-react';
 import { basicDark } from 'cm6-theme-basic-dark';
 
-import type { PanelComponentProps, ActiveFileSlice, GitChangeStatus } from '../../types';
+import type {
+  PanelComponentProps,
+  GitChangeStatus,
+  MDXEditorPanelActions,
+  MDXEditorPanelContext,
+} from '../../types';
 
 /**
  * Extended props for MDXEditorPanel with optional prop-controlled mode
  */
-export interface MDXEditorPanelProps extends PanelComponentProps {
+export interface MDXEditorPanelProps
+  extends PanelComponentProps<MDXEditorPanelActions, MDXEditorPanelContext> {
   /**
    * Optional file path to display.
    * If provided, this takes precedence over event-based selection and context slices.
@@ -70,7 +76,7 @@ export interface MDXEditorPanelProps extends PanelComponentProps {
  */
 const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
   context,
-  actions: _actions,
+  actions,
   events,
   filePath: filePathProp,
   showCloseButton = true,
@@ -91,12 +97,11 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
   const _isDirty = isDirtyProp !== undefined ? isDirtyProp : internalIsDirty;
   const gitStatus = gitStatusProp !== undefined ? gitStatusProp : internalGitStatus;
 
-  // Get file system adapter from context
-  const fileSystem = context.adapters?.fileSystem;
-  const isEditable = Boolean(fileSystem?.writeFile);
+  // File editing is always available via actions
+  const isEditable = Boolean(actions.writeFile);
 
-  // Get active file from context slice
-  const activeFileSlice = context.getSlice<ActiveFileSlice>('active-file');
+  // Get active file from typed context
+  const { activeFile } = context;
 
   // Memoize plugins array for performance
   const plugins = useMemo(
@@ -208,12 +213,12 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
   // Sync with active-file slice (only for markdown files, only when not prop-controlled)
   useEffect(() => {
     if (!filePathProp) {
-      const path = activeFileSlice?.data?.path;
+      const path = activeFile?.data?.path;
       if (path && (path.endsWith('.md') || path.endsWith('.mdx'))) {
         setFilePath(path);
       }
     }
-  }, [filePathProp, activeFileSlice?.data?.path]);
+  }, [filePathProp, activeFile?.data?.path]);
 
   // Listen for file:open events (only handle markdown files, only when not prop-controlled)
   useEffect(() => {
@@ -263,9 +268,9 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
     async (content?: string) => {
       const contentToSave = content || markdown;
 
-      if (filePath && fileSystem?.writeFile) {
+      if (filePath && actions.writeFile) {
         try {
-          await fileSystem.writeFile(filePath, contentToSave);
+          await actions.writeFile(filePath, contentToSave);
 
           // Update dirty state if not prop-controlled
           if (isDirtyProp === undefined) {
@@ -290,13 +295,13 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
         }
       }
     },
-    [markdown, filePath, fileSystem, events, gitStatus, isDirtyProp, gitStatusProp]
+    [markdown, filePath, actions, events, gitStatus, isDirtyProp, gitStatusProp]
   );
 
   // Load file content when filePath changes
   useEffect(() => {
     const loadFileContent = async () => {
-      if (!filePath || !fileSystem?.readFile) {
+      if (!filePath) {
         setMarkdown('');
         return;
       }
@@ -305,16 +310,12 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
       setLoadError(null);
 
       try {
-        const content = await fileSystem.readFile(filePath);
+        const content = await actions.readFile(filePath);
 
-        if (content !== null) {
-          setMarkdown(content);
-          setParseError(null);
-          if (isDirtyProp === undefined) {
-            setInternalIsDirty(false);
-          }
-        } else {
-          throw new Error('Failed to read file');
+        setMarkdown(content);
+        setParseError(null);
+        if (isDirtyProp === undefined) {
+          setInternalIsDirty(false);
         }
       } catch (error) {
         console.error('Error loading file:', error);
@@ -327,7 +328,7 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
     };
 
     loadFileContent();
-  }, [filePath, fileSystem, isDirtyProp]);
+  }, [filePath, actions, isDirtyProp]);
 
   // Handle keyboard shortcuts for save
   useEffect(() => {

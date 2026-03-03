@@ -9,13 +9,17 @@ import { FileEditorPanel } from './panels/FileEditorPanel';
 import { GitDiffPanel } from './panels/GitDiffPanel';
 import { MDXEditorPanel } from './panels/MDXEditorPanel';
 import type { PanelDefinition, PanelContextValue } from './types';
-import { fileEditingPanelTools, fileEditingPanelToolsMetadata } from './tools';
+import { fileEditingPanelTools } from './tools';
 
 /**
  * Export array of panel definitions.
  * This is the required export for panel extensions.
+ *
+ * Note: Uses `any` for both TActions and TContext because this is a heterogeneous array containing
+ * panels with different action and context type requirements. Each panel definition is still
+ * individually type-checked.
  */
-export const panels: PanelDefinition[] = [
+export const panels: ReadonlyArray<PanelDefinition<any, any>> = [
   {
     metadata: {
       id: 'industry-theme.file-editor',
@@ -24,7 +28,7 @@ export const panels: PanelDefinition[] = [
       version: '0.1.0',
       author: 'Industry Theme',
       description: 'Monaco-based code editor with syntax highlighting',
-      slices: ['active-file', 'fileTree'],
+      slices: ['activeFile'],
       tools: [fileEditingPanelTools[0]], // openFileTool
     },
     component: FileEditorPanel,
@@ -50,7 +54,7 @@ export const panels: PanelDefinition[] = [
       version: '0.1.0',
       author: 'Industry Theme',
       description: 'Side-by-side git diff viewer',
-      slices: ['git', 'fileTree'],
+      slices: [],
       tools: [fileEditingPanelTools[1]], // viewDiffTool
     },
     component: GitDiffPanel,
@@ -76,7 +80,7 @@ export const panels: PanelDefinition[] = [
       version: '0.1.0',
       author: 'Industry Theme',
       description: 'Rich markdown/MDX editor with live preview',
-      slices: ['active-file', 'fileTree'],
+      slices: ['activeFile'],
       tools: [fileEditingPanelTools[2]], // openMarkdownTool
     },
     component: MDXEditorPanel,
@@ -131,8 +135,23 @@ export { FileEditorPanel, FileEditorPanelPreview } from './panels/FileEditorPane
 export { GitDiffPanel, GitDiffPanelPreview } from './panels/GitDiffPanel';
 export { MDXEditorPanel, MDXEditorPanelPreview } from './panels/MDXEditorPanel';
 
+// Re-export panel prop types
+export type { FileEditorPanelProps } from './panels/FileEditorPanel';
+export type { GitDiffPanelProps } from './panels/GitDiffPanel';
+export type { MDXEditorPanelProps } from './panels/MDXEditorPanel';
+
 // Re-export types
 export type { GitChangeStatus } from './types';
+
+// Re-export panel-specific action and context types
+export type {
+  FileEditorPanelActions,
+  FileEditorPanelContext,
+  GitDiffPanelActions,
+  GitDiffPanelContext,
+  MDXEditorPanelActions,
+  MDXEditorPanelContext,
+} from './types';
 
 // Re-export framework types for convenience
 export type {

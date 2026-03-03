@@ -1,13 +1,17 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useEffect, useRef } from 'react';
-import { FileEditorPanel } from './FileEditorPanel';
+import { FileEditorPanel, type FileEditorPanelProps } from './FileEditorPanel';
 import {
-  createMockContext,
-  createMockActions,
+  createMockBaseContext,
+  createMockFileSystemAdapter,
   createMockEvents,
   emitFileOpen,
 } from '../../mocks/panelContext';
-import type { PanelComponentProps } from '../../types';
+import type {
+  FileEditorPanelActions,
+  FileEditorPanelContext,
+  PanelContextValue,
+} from '../../types';
 
 // Mock file content
 const mockTypeScriptContent = `import React, { useState } from 'react';
@@ -63,6 +67,42 @@ import { FileEditorPanel } from '@industry-theme/file-editing-panels';
 \`\`\`
 `;
 
+// Helper to create typed context for FileEditorPanel
+const createFileEditorContext = (
+  initialFiles?: Record<string, string>,
+  vimMode = false
+): PanelContextValue<FileEditorPanelContext> => {
+  const baseContext = createMockBaseContext(initialFiles);
+  return {
+    ...baseContext,
+    activeFile: {
+      scope: 'repository',
+      name: 'active-file',
+      data: null,
+      loading: false,
+      error: null,
+      refresh: async () => {},
+    },
+    preferences: {
+      scope: 'repository',
+      name: 'preferences',
+      data: { vimMode },
+      loading: false,
+      error: null,
+      refresh: async () => {},
+    },
+  };
+};
+
+// Helper to create typed actions for FileEditorPanel
+const createFileEditorActions = (
+  fileSystem: ReturnType<typeof createMockFileSystemAdapter>
+): FileEditorPanelActions => ({
+  readFile: async (path: string) => fileSystem.readFile(path),
+  writeFile: async (path: string, content: string) =>
+    fileSystem.writeFile(path, content),
+});
+
 // Helper component that wraps FileEditorPanel with mock context
 const FileEditorPanelWithMocks = ({
   initialFilePath,
@@ -73,8 +113,9 @@ const FileEditorPanelWithMocks = ({
   initialFiles?: Record<string, string>;
   vimMode?: boolean;
 }) => {
-  const context = createMockContext(undefined, initialFiles, { vimMode });
-  const actions = createMockActions();
+  const fileSystem = createMockFileSystemAdapter(initialFiles);
+  const context = createFileEditorContext(initialFiles, vimMode);
+  const actions = createFileEditorActions(fileSystem);
   const events = createMockEvents();
   const hasEmittedRef = useRef(false);
 
@@ -88,7 +129,7 @@ const FileEditorPanelWithMocks = ({
     }
   }, [initialFilePath, events]);
 
-  const props: PanelComponentProps = { context, actions, events };
+  const props: FileEditorPanelProps = { context, actions, events };
   return (
     <div style={{ height: '100%', width: '100%' }}>
       <FileEditorPanel {...props} />

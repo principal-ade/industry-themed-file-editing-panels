@@ -1,1 +1,1 @@
-export { MDXEditorPanel, MDXEditorPanelPreview } from './MDXEditorPanel';
+export { MDXEditorPanel, MDXEditorPanelPreview, type MDXEditorPanelProps } from './MDXEditorPanel';

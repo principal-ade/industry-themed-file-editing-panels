@@ -6,7 +6,6 @@ import type {
   PanelEventEmitter,
   PanelEvent,
   PanelEventType,
-  DataSlice,
 } from '../types';
 
 /**
@@ -64,16 +63,6 @@ export const createMockFileSystemAdapter = (
 };
 
 /**
- * Mock Git Status data for Storybook
- */
-const mockGitStatusData = {
-  staged: ['src/components/Button.tsx', 'src/styles/theme.css'],
-  unstaged: ['README.md', 'package.json'],
-  untracked: ['src/new-feature.tsx'],
-  deleted: [],
-};
-
-/**
  * Sample file content for mock file system
  */
 const mockFileContent: Record<string, string> = {
@@ -123,123 +112,17 @@ npm run dev
 };
 
 /**
- * Create a mock DataSlice
+ * Base mock context with just the core fields (no typed slices)
  */
-const createMockSlice = <T,>(
-  name: string,
-  data: T,
-  scope: 'workspace' | 'repository' | 'global' = 'repository'
-): DataSlice<T> => ({
-  scope,
-  name,
-  data,
-  loading: false,
-  error: null,
-  refresh: async () => {
-    // eslint-disable-next-line no-console
-    console.log(`[Mock] Refreshing slice: ${name}`);
-  },
-});
-
-/**
- * Mock Panel Context for Storybook
- */
-export const createMockContext = (
-  overrides?: Partial<PanelContextValue>,
-  initialFiles?: Record<string, string>,
-  options?: { vimMode?: boolean }
+export const createMockBaseContext = (
+  initialFiles?: Record<string, string>
 ): PanelContextValue => {
-  // Create mock data slices
-  const mockSlices = new Map<string, DataSlice>([
-    ['git', createMockSlice('git', mockGitStatusData)],
-    [
-      'active-file',
-      createMockSlice('active-file', null),
-    ],
-    [
-      'preferences',
-      createMockSlice('preferences', { vimMode: options?.vimMode ?? false }),
-    ],
-    [
-      'markdown',
-      createMockSlice('markdown', [
-        {
-          path: 'README.md',
-          title: 'Project README',
-          lastModified: Date.now() - 3600000,
-        },
-        {
-          path: 'docs/API.md',
-          title: 'API Documentation',
-          lastModified: Date.now() - 86400000,
-        },
-      ]),
-    ],
-    [
-      'fileTree',
-      createMockSlice('fileTree', {
-        name: 'my-project',
-        path: '/Users/developer/my-project',
-        type: 'directory',
-        children: [
-          {
-            name: 'src',
-            path: '/Users/developer/my-project/src',
-            type: 'directory',
-            children: [
-              {
-                name: 'index.ts',
-                path: '/Users/developer/my-project/src/index.ts',
-                type: 'file',
-              },
-              {
-                name: 'utils.ts',
-                path: '/Users/developer/my-project/src/utils.ts',
-                type: 'file',
-              },
-            ],
-          },
-          {
-            name: 'package.json',
-            path: '/Users/developer/my-project/package.json',
-            type: 'file',
-          },
-          {
-            name: 'README.md',
-            path: '/Users/developer/my-project/README.md',
-            type: 'file',
-          },
-        ],
-      }),
-    ],
-    [
-      'packages',
-      createMockSlice('packages', [
-        { name: 'react', version: '19.0.0', path: '/node_modules/react' },
-        {
-          name: 'typescript',
-          version: '5.0.4',
-          path: '/node_modules/typescript',
-        },
-      ]),
-    ],
-    [
-      'quality',
-      createMockSlice('quality', {
-        coverage: 85,
-        issues: 3,
-        complexity: 12,
-      }),
-    ],
-  ]);
-
-  // Create mock file system adapter with initial files
   const mockFileSystem = createMockFileSystemAdapter({
     ...mockFileContent,
     ...initialFiles,
   });
 
-  const defaultContext: PanelContextValue = {
+  return {
     currentScope: {
       type: 'repository',
       workspace: {
@@ -251,37 +134,8 @@ export const createMockContext = (
         path: '/Users/developer/my-project',
       },
     },
-    slices: mockSlices,
     adapters: {
       fileSystem: mockFileSystem,
-    },
-    getSlice: <T,>(name: string): DataSlice<T> | undefined => {
-      return mockSlices.get(name) as DataSlice<T> | undefined;
-    },
-    getWorkspaceSlice: <T,>(name: string): DataSlice<T> | undefined => {
-      const slice = mockSlices.get(name);
-      return slice?.scope === 'workspace' ? (slice as DataSlice<T>) : undefined;
-    },
-    getRepositorySlice: <T,>(name: string): DataSlice<T> | undefined => {
-      const slice = mockSlices.get(name);
-      return slice?.scope === 'repository'
-        ? (slice as DataSlice<T>)
-        : undefined;
-    },
-    hasSlice: (name: string, scope?: 'workspace' | 'repository'): boolean => {
-      const slice = mockSlices.get(name);
-      if (!slice) return false;
-      if (!scope) return true;
-      return slice.scope === scope;
-    },
-    isSliceLoading: (
-      name: string,
-      scope?: 'workspace' | 'repository'
-    ): boolean => {
-      const slice = mockSlices.get(name);
-      if (!slice) return false;
-      if (scope && slice.scope !== scope) return false;
-      return slice.loading;
     },
     refresh: async (
       scope?: 'workspace' | 'repository',
@@ -291,8 +145,19 @@ export const createMockContext = (
       console.log('[Mock] Context refresh called', { scope, slice });
     },
   };
+};
 
-  return { ...defaultContext, ...overrides };
+/**
+ * Mock Panel Context for Storybook (legacy compatibility)
+ * @deprecated Use createMockBaseContext or typed context creators instead
+ */
+export const createMockContext = (
+  overrides?: Partial<PanelContextValue>,
+  initialFiles?: Record<string, string>,
+  _options?: { vimMode?: boolean }
+): PanelContextValue => {
+  const baseContext = createMockBaseContext(initialFiles);
+  return { ...baseContext, ...overrides };
 };
 
 /**

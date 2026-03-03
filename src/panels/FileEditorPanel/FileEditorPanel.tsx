@@ -3,20 +3,17 @@ import { useTheme } from '@principal-ade/industry-theme';
 import { ThemedMonacoWithProvider } from '@principal-ade/industry-themed-monaco-editor';
 import { FileText, X } from 'lucide-react';
 
-import type { PanelComponentProps, ActiveFileSlice } from '../../types';
-
-/**
- * User preferences slice shape
- */
-interface UserPreferences {
-  vimMode?: boolean;
-  // other preferences...
-}
+import type {
+  PanelComponentProps,
+  FileEditorPanelActions,
+  FileEditorPanelContext,
+} from '../../types';
 
 /**
  * Extended props for FileEditorPanel with optional prop-controlled mode
  */
-export interface FileEditorPanelProps extends PanelComponentProps {
+export interface FileEditorPanelProps
+  extends PanelComponentProps<FileEditorPanelActions, FileEditorPanelContext> {
   /**
    * Optional file path to display.
    * If provided, this takes precedence over event-based selection and context slices.
@@ -77,7 +74,7 @@ const getLanguage = (path: string): string => {
  */
 const FileEditorPanelContent: React.FC<FileEditorPanelProps> = ({
   context,
-  actions: _actions,
+  actions,
   events,
   filePath: filePathProp,
   showCloseButton = false,
@@ -95,16 +92,14 @@ const FileEditorPanelContent: React.FC<FileEditorPanelProps> = ({
   const isSavingRef = useRef(false);
   const isDirtyRef = useRef(false);
 
-  // Get file system adapter from context
-  const fileSystem = context.adapters?.fileSystem;
-  const isEditable = Boolean(fileSystem?.writeFile);
+  // File editing is always available via actions
+  const isEditable = Boolean(actions.writeFile);
 
-  // Get active file from context slice
-  const activeFileSlice = context.getSlice<ActiveFileSlice>('active-file');
+  // Get active file from typed context
+  const { activeFile, preferences } = context;
 
   // Get user preferences (vim mode, etc.)
-  const preferencesSlice = context.getSlice<UserPreferences>('preferences');
-  const vimMode = preferencesSlice?.data?.vimMode ?? false;
+  const vimMode = preferences?.data?.vimMode ?? false;
 
   useEffect(() => {
     isDirtyRef.current = isDirty;
@@ -128,10 +123,10 @@ const FileEditorPanelContent: React.FC<FileEditorPanelProps> = ({
 
   // Sync with active-file slice (only when not prop-controlled)
   useEffect(() => {
-    if (!filePathProp && activeFileSlice?.data?.path) {
-      setFilePath(activeFileSlice.data.path);
+    if (!filePathProp && activeFile?.data?.path) {
+      setFilePath(activeFile.data.path);
     }
-  }, [filePathProp, activeFileSlice?.data?.path]);
+  }, [filePathProp, activeFile?.data?.path]);
 
   // Listen for file:open events (only when not prop-controlled)
   useEffect(() => {
@@ -150,7 +145,7 @@ const FileEditorPanelContent: React.FC<FileEditorPanelProps> = ({
   }, [events, filePathProp]);
 
   const loadFile = useCallback(async () => {
-    if (!filePath || !fileSystem?.readFile) {
+    if (!filePath) {
       latestFilePathRef.current = null;
       setFileContent('');
       setEditorContent('');
@@ -165,21 +160,17 @@ const FileEditorPanelContent: React.FC<FileEditorPanelProps> = ({
     setError(null);
 
     try {
-      const content = await fileSystem.readFile(filePath);
+      const content = await actions.readFile(filePath);
 
       if (latestFilePathRef.current !== filePath) {
         return;
       }
 
-      if (content !== null) {
-        setFileContent(content);
-        setSaveError(null);
-        if (!isDirtyRef.current) {
-          setEditorContent(content);
-          setIsDirty(false);
-        }
-      } else {
-        throw new Error('Failed to read file');
+      setFileContent(content);
+      setSaveError(null);
+      if (!isDirtyRef.current) {
+        setEditorContent(content);
+        setIsDirty(false);
       }
     } catch (err) {
       console.error('Error loading file:', err);
@@ -192,7 +183,7 @@ const FileEditorPanelContent: React.FC<FileEditorPanelProps> = ({
         setIsLoading(false);
       }
     }
-  }, [filePath, fileSystem]);
+  }, [filePath, actions]);
 
   useEffect(() => {
     loadFile();
@@ -212,7 +203,7 @@ const FileEditorPanelContent: React.FC<FileEditorPanelProps> = ({
 
   const handleEditorSave = useCallback(
     async (value?: string) => {
-      if (!filePath || !fileSystem?.writeFile) {
+      if (!filePath || !actions.writeFile) {
         return;
       }
 
@@ -227,7 +218,7 @@ const FileEditorPanelContent: React.FC<FileEditorPanelProps> = ({
       setSaveError(null);
 
       try {
-        await fileSystem.writeFile(filePath, contentToSave);
+        await actions.writeFile(filePath, contentToSave);
 
         if (latestFilePathRef.current === filePath) {
           setFileContent(contentToSave);
@@ -255,7 +246,7 @@ const FileEditorPanelContent: React.FC<FileEditorPanelProps> = ({
         isSavingRef.current = false;
       }
     },
-    [editorContent, fileContent, filePath, isDirty, fileSystem, events]
+    [editorContent, fileContent, filePath, isDirty, actions, events]
   );
 
   const handleClose = useCallback(() => {

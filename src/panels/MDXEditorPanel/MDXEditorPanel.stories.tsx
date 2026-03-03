@@ -1,13 +1,17 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useEffect, useRef } from 'react';
-import { MDXEditorPanel } from './MDXEditorPanel';
+import { MDXEditorPanel, type MDXEditorPanelProps } from './MDXEditorPanel';
 import {
-  createMockContext,
-  createMockActions,
+  createMockBaseContext,
+  createMockFileSystemAdapter,
   createMockEvents,
   emitFileOpen,
 } from '../../mocks/panelContext';
-import type { PanelComponentProps } from '../../types';
+import type {
+  MDXEditorPanelActions,
+  MDXEditorPanelContext,
+  PanelContextValue,
+} from '../../types';
 
 // Mock markdown content
 const mockReadmeContent = `# Project Documentation
@@ -138,6 +142,33 @@ System for tracking log coverage, detecting orphaned logs, and generating report
 - [Event Schema Implementation](./EVENT-SCHEMA-IMPLEMENTATION-SUMMARY.md)
 `;
 
+// Helper to create typed context for MDXEditorPanel
+const createMDXEditorContext = (
+  initialFiles?: Record<string, string>
+): PanelContextValue<MDXEditorPanelContext> => {
+  const baseContext = createMockBaseContext(initialFiles);
+  return {
+    ...baseContext,
+    activeFile: {
+      scope: 'repository',
+      name: 'active-file',
+      data: null,
+      loading: false,
+      error: null,
+      refresh: async () => {},
+    },
+  };
+};
+
+// Helper to create typed actions for MDXEditorPanel
+const createMDXEditorActions = (
+  fileSystem: ReturnType<typeof createMockFileSystemAdapter>
+): MDXEditorPanelActions => ({
+  readFile: async (path: string) => fileSystem.readFile(path),
+  writeFile: async (path: string, content: string) =>
+    fileSystem.writeFile(path, content),
+});
+
 // Helper component that wraps MDXEditorPanel with mock context
 const MDXEditorPanelWithMocks = ({
   initialFilePath,
@@ -146,8 +177,9 @@ const MDXEditorPanelWithMocks = ({
   initialFilePath?: string;
   initialFiles?: Record<string, string>;
 }) => {
-  const context = createMockContext(undefined, initialFiles);
-  const actions = createMockActions();
+  const fileSystem = createMockFileSystemAdapter(initialFiles);
+  const context = createMDXEditorContext(initialFiles);
+  const actions = createMDXEditorActions(fileSystem);
   const events = createMockEvents();
   const hasEmittedRef = useRef(false);
 
@@ -161,7 +193,7 @@ const MDXEditorPanelWithMocks = ({
     }
   }, [initialFilePath, events]);
 
-  const props: PanelComponentProps = { context, actions, events };
+  const props: MDXEditorPanelProps = { context, actions, events };
   return (
     <div style={{ height: '100%', width: '100%' }}>
       <MDXEditorPanel {...props} />

@@ -6,7 +6,12 @@ import type { FileDiffMetadata } from '@pierre/diffs';
 import { createPatch } from 'diff';
 import { GitCommit, X } from 'lucide-react';
 
-import type { PanelComponentProps, GitChangeStatus } from '../../types';
+import type {
+  PanelComponentProps,
+  GitChangeStatus,
+  GitDiffPanelActions,
+  GitDiffPanelContext,
+} from '../../types';
 
 const statusMeta: Record<
   GitChangeStatus,
@@ -152,7 +157,8 @@ interface GitDiffPayload {
 /**
  * Extended props for GitDiffPanel with optional prop-controlled mode
  */
-export interface GitDiffPanelProps extends PanelComponentProps {
+export interface GitDiffPanelProps
+  extends PanelComponentProps<GitDiffPanelActions, GitDiffPanelContext> {
   /**
    * Optional file path to display diff for.
    * If provided, this takes precedence over event-based selection.
@@ -176,8 +182,8 @@ export interface GitDiffPanelProps extends PanelComponentProps {
  * GitDiffPanelContent - Internal component that uses theme
  */
 const GitDiffPanelContent: React.FC<GitDiffPanelProps> = ({
-  context,
-  actions: _actions,
+  context: _context,
+  actions,
   events,
   filePath: filePathProp,
   gitStatus: gitStatusProp,
@@ -194,9 +200,6 @@ const GitDiffPanelContent: React.FC<GitDiffPanelProps> = ({
   const [contentProvidedExternally, setContentProvidedExternally] = useState(false);
 
   const language = useMemo(() => languageFromPath(filePath), [filePath]);
-
-  // Get file system adapter from context
-  const fileSystem = context.adapters?.fileSystem;
 
   // Prop-controlled mode: when filePath prop is provided, it takes precedence
   useEffect(() => {
@@ -252,42 +255,28 @@ const GitDiffPanelContent: React.FC<GitDiffPanelProps> = ({
         return;
       }
 
-      // If we don't have a file system adapter, we can't load content
-      if (!fileSystem?.readFile) {
-        // Content should be provided via events
-        return;
-      }
-
       setIsLoading(true);
       setError(null);
 
       try {
         // Read the current file content as "modified"
-        const modified = await fileSystem.readFile(filePath);
+        const modified = await actions.readFile(filePath);
 
         if (!isActive) return;
 
-        setModifiedContent(modified ?? '');
+        setModifiedContent(modified);
 
         // For untracked files, original content is empty
         if (status === 'untracked') {
           setOriginalContent('');
         } else {
-          // For modified files, try to get the original content from git
-          // Use getFileContentAtRevision if available (from the fileSystem adapter)
-          // Type assertion is needed since this is an optional extension
-          const fsWithGit = fileSystem as any;
-          if (fsWithGit && typeof fsWithGit.getFileContentAtRevision === 'function') {
-            try {
-              const original = await fsWithGit.getFileContentAtRevision(filePath, 'HEAD');
-              if (!isActive) return;
-              setOriginalContent(original ?? '');
-            } catch (gitError) {
-              console.warn('[GitDiffPanel] Failed to get file from git, using empty original:', gitError);
-              setOriginalContent('');
-            }
-          } else {
-            console.warn('[GitDiffPanel] getFileContentAtRevision not available in fileSystem adapter');
+          // For modified files, get the original content from git
+          try {
+            const original = await actions.getFileContentAtRevision(filePath, 'HEAD');
+            if (!isActive) return;
+            setOriginalContent(original);
+          } catch (gitError) {
+            console.warn('[GitDiffPanel] Failed to get file from git, using empty original:', gitError);
             setOriginalContent('');
           }
         }
@@ -314,7 +303,7 @@ const GitDiffPanelContent: React.FC<GitDiffPanelProps> = ({
     return () => {
       isActive = false;
     };
-  }, [filePath, status, fileSystem, contentProvidedExternally]);
+  }, [filePath, status, actions, contentProvidedExternally]);
 
   const handleClose = () => {
     events.emit({

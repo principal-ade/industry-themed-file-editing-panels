@@ -1,13 +1,17 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useEffect, useRef } from 'react';
-import { GitDiffPanel } from './GitDiffPanel';
+import { GitDiffPanel, type GitDiffPanelProps } from './GitDiffPanel';
 import {
-  createMockContext,
-  createMockActions,
+  createMockBaseContext,
   createMockEvents,
   emitGitDiff,
 } from '../../mocks/panelContext';
-import type { PanelComponentProps, GitChangeStatus } from '../../types';
+import type {
+  GitDiffPanelActions,
+  GitDiffPanelContext,
+  GitChangeStatus,
+  PanelContextValue,
+} from '../../types';
 
 // Mock diff content for stories
 const mockOriginalContent = `import React from 'react';
@@ -39,6 +43,21 @@ export function Button({ label, onClick, variant = 'primary' }: ButtonProps) {
   );
 }`;
 
+// Helper to create typed context for GitDiffPanel
+const createGitDiffContext = (): PanelContextValue<GitDiffPanelContext> => {
+  return createMockBaseContext();
+};
+
+// Helper to create typed actions for GitDiffPanel
+const createGitDiffActions = (
+  fileContents: Record<string, string>,
+  revisionContents: Record<string, string>
+): GitDiffPanelActions => ({
+  readFile: async (path: string) => fileContents[path] ?? '',
+  getFileContentAtRevision: async (path: string, _revision: string) =>
+    revisionContents[path] ?? '',
+});
+
 // Helper component that wraps GitDiffPanel with mock context
 const GitDiffPanelWithMocks = ({
   initialFilePath,
@@ -51,8 +70,11 @@ const GitDiffPanelWithMocks = ({
   original?: string;
   modified?: string;
 }) => {
-  const context = createMockContext();
-  const actions = createMockActions();
+  const context = createGitDiffContext();
+  const actions = createGitDiffActions(
+    initialFilePath ? { [initialFilePath]: modified } : {},
+    initialFilePath ? { [initialFilePath]: original } : {}
+  );
   const events = createMockEvents();
   const hasEmittedRef = useRef(false);
 
@@ -66,7 +88,7 @@ const GitDiffPanelWithMocks = ({
     }
   }, [initialFilePath, status, original, modified, events]);
 
-  const props: PanelComponentProps = { context, actions, events };
+  const props: GitDiffPanelProps = { context, actions, events };
   return (
     <div style={{ height: '100%', width: '100%' }}>
       <GitDiffPanel {...props} />
@@ -258,35 +280,18 @@ events.emit({
  * - Want automatic content fetching
  */
 const GitDiffPanelWithFileSystem = () => {
-  const context = createMockContext();
-  const actions = createMockActions();
-  const events = createMockEvents();
-
-  // Add file system adapter that simulates reading from disk + git
-  // Using 'as any' to extend the adapter with optional git method
-  context.adapters = {
-    fileSystem: {
-      // Read current file content (working tree)
-      readFile: async (filePath: string) => {
-        console.log('[FileSystem Adapter] Reading file:', filePath);
-        // In real app: read from actual file system
-        return mockModifiedContent;
-      },
-
-      // Read file content from git at specific revision (optional extension)
-      getFileContentAtRevision: async (filePath: string, revision: string = 'HEAD') => {
-        console.log('[FileSystem Adapter] Reading from git:', filePath, 'at', revision);
-        // In real app: call IPC to git executor
-        return mockOriginalContent;
-      },
-
-      // Other required methods (stubs)
-      exists: async () => true,
-      writeFile: async () => {},
-      createDir: async () => {},
-      deleteFile: async () => {},
-    } as any,
+  const context = createGitDiffContext();
+  const actions: GitDiffPanelActions = {
+    readFile: async (filePath: string) => {
+      console.log('[FileSystem Adapter] Reading file:', filePath);
+      return mockModifiedContent;
+    },
+    getFileContentAtRevision: async (filePath: string, revision: string) => {
+      console.log('[FileSystem Adapter] Reading from git:', filePath, 'at', revision);
+      return mockOriginalContent;
+    },
   };
+  const events = createMockEvents();
 
   const hasEmittedRef = useRef(false);
 
@@ -305,7 +310,7 @@ const GitDiffPanelWithFileSystem = () => {
     }
   }, [events]);
 
-  const props: PanelComponentProps = { context, actions, events };
+  const props: GitDiffPanelProps = { context, actions, events };
   return (
     <div style={{ height: '100%', width: '100%' }}>
       <GitDiffPanel {...props} />
