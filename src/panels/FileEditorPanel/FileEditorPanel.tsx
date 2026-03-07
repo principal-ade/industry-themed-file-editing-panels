@@ -156,6 +156,25 @@ const FileEditorPanelContent: React.FC<FileEditorPanelProps> = ({
     }
 
     latestFilePathRef.current = filePath;
+
+    // Check if content is already available from the activeFile slice
+    // This avoids re-loading when the context has already loaded the file
+    if (
+      activeFile?.data?.path === filePath &&
+      activeFile?.data?.content != null
+    ) {
+      const content = activeFile.data.content;
+      setFileContent(content);
+      setSaveError(null);
+      if (!isDirtyRef.current) {
+        setEditorContent(content);
+        setIsDirty(false);
+      }
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -183,7 +202,7 @@ const FileEditorPanelContent: React.FC<FileEditorPanelProps> = ({
         setIsLoading(false);
       }
     }
-  }, [filePath, actions]);
+  }, [filePath, actions, activeFile?.data?.path, activeFile?.data?.content]);
 
   useEffect(() => {
     loadFile();
