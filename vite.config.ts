@@ -29,7 +29,10 @@ export default defineConfig(({ mode }) => ({
       formats: ['es'],
     },
     rollupOptions: {
-      // Externalize peer dependencies and Monaco editor - these come from the host application
+      // Externalize peer dependencies and Monaco editor - these come from the host application.
+      // @pierre/diffs is externalized because it registers a global `<diffs-container>`
+      // custom element; bundling our own copy collides with the host's installation
+      // and silently loads the wrong stylesheet against the wrong renderer attributes.
       external: [
         'react',
         'react-dom',
@@ -37,6 +40,7 @@ export default defineConfig(({ mode }) => ({
         'monaco-editor',
         '@monaco-editor/react',
         '@principal-ade/industry-themed-monaco-editor',
+        /^@pierre\/diffs(\/.*)?$/,
       ],
       output: {
         globals: {
