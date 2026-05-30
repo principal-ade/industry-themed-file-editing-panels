@@ -25,6 +25,7 @@ import {
   BlockTypeSelect,
   DiffSourceToggleWrapper,
   MDXEditor,
+  type MDXEditorMethods,
 } from '@principal-ai/mdx-editor';
 import '@principal-ai/mdx-editor/style.css';
 import './MDXEditorPanel.css';
@@ -39,6 +40,7 @@ import {
   ViewModeController,
   type ViewMode,
 } from './vim';
+import { defaultFormatDroppedPath } from './pathDrop';
 
 import type {
   PanelComponentProps,
@@ -104,6 +106,21 @@ export interface MDXEditorPanelProps
    * can track and persist the current mode.
    */
   onViewModeChange?: (mode: ViewMode) => void;
+  /**
+   * Enable inserting a dragged file path into the document at the cursor.
+   * When something is dropped onto the editor (in rich-text mode) carrying a
+   * `text/plain` (or `text/uri-list`) path, it is inserted as a markdown link
+   * (`[fileName](path)` by default). Source/diff mode keeps CodeMirror's own
+   * native text-drop behavior. Defaults to true.
+   */
+  enablePathDrop?: boolean;
+  /**
+   * Customize what a dropped path becomes. Receives the raw dropped string
+   * (still shell-quoted if the drag source quoted it) and returns the markdown
+   * to insert, or null to ignore the drop. Defaults to a markdown link whose
+   * text is the file name and whose target is the full (relative) path.
+   */
+  formatDroppedPath?: (rawPath: string) => string | null;
 }
 
 /**
@@ -122,6 +139,8 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
   onVimEnabledChange,
   viewMode: viewModeProp,
   onViewModeChange,
+  enablePathDrop = true,
+  formatDroppedPath = defaultFormatDroppedPath,
 }) => {
   const { theme } = useTheme();
   const [filePath, setFilePath] = useState<string | null>(null);
@@ -150,12 +169,55 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
     [vimEnabledProp, onVimEnabledChange]
   );
 
+  // File editing is always available via actions
+  const isEditable = Boolean(actions.writeFile);
+
   // Stable compartment shared between the editor extensions and the toggle so
   // vim can be reconfigured live without remounting the editor.
   const vimCompartment = useVimCompartment();
 
-  // File editing is always available via actions
-  const isEditable = Boolean(actions.writeFile);
+  // Editor ref for imperative insertion (used by drag-to-insert).
+  const editorRef = React.useRef<MDXEditorMethods>(null);
+
+  // Track the live view mode so the drop handler can defer to CodeMirror's
+  // native text-drop in source/diff mode and only insert markdown in rich-text.
+  const [currentViewMode, setCurrentViewMode] = useState<ViewMode>(
+    viewModeProp ?? 'rich-text'
+  );
+  const handleViewModeChange = useCallback(
+    (mode: ViewMode) => {
+      setCurrentViewMode(mode);
+      onViewModeChange?.(mode);
+    },
+    [onViewModeChange]
+  );
+
+  // Insert a dragged file path as markdown at the cursor (rich-text only).
+  const handleEditorDragOver = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      if (!enablePathDrop || !isEditable || currentViewMode !== 'rich-text') return;
+      const types = e.dataTransfer.types;
+      if (types.includes('text/plain') || types.includes('text/uri-list')) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    },
+    [enablePathDrop, isEditable, currentViewMode]
+  );
+  const handleEditorDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      if (!enablePathDrop || !isEditable || currentViewMode !== 'rich-text') return;
+      const raw =
+        e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text/uri-list');
+      if (!raw) return;
+      const markdownToInsert = formatDroppedPath(raw);
+      if (!markdownToInsert) return;
+      e.preventDefault();
+      e.stopPropagation();
+      editorRef.current?.insertMarkdown(markdownToInsert);
+    },
+    [enablePathDrop, isEditable, currentViewMode, formatDroppedPath]
+  );
 
   // Get active file from typed context
   const { activeFile } = context;
@@ -223,7 +285,7 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
             </DiffSourceToggleWrapper>
             {/* Headless: reports view-mode changes to the host and applies
                 host-requested mode switches. Must live inside the editor realm. */}
-            <ViewModeController desired={viewModeProp} onChange={onViewModeChange} />
+            <ViewModeController desired={viewModeProp} onChange={handleViewModeChange} />
             {/* Toggles vim on the CodeMirror surfaces; hidden in rich-text. */}
             <VimToggle
               compartment={vimCompartment}
@@ -271,7 +333,7 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
       vimEnabled,
       handleVimEnabledChange,
       viewModeProp,
-      onViewModeChange,
+      handleViewModeChange,
     ]
   );
 
@@ -522,6 +584,8 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
   const editorContent = (
     <div
       className="dark-theme mdx-editor-wrapper"
+      onDragOverCapture={handleEditorDragOver}
+      onDropCapture={handleEditorDrop}
       style={{
         height: '100%',
         width: '100%',
@@ -534,6 +598,7 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
       } as React.CSSProperties}
     >
       <MDXEditor
+        ref={editorRef}
         key={filePath || 'default'}
         markdown={safeMarkdown}
         onChange={handleChange}
