@@ -32,6 +32,13 @@ import './dark-editor.css';
 import { useTheme } from '@principal-ade/industry-theme';
 import { FileText } from 'lucide-react';
 import { basicDark } from 'cm6-theme-basic-dark';
+import {
+  useVimCompartment,
+  vimExtension,
+  VimToggle,
+  ViewModeController,
+  type ViewMode,
+} from './vim';
 
 import type {
   PanelComponentProps,
@@ -69,6 +76,34 @@ export interface MDXEditorPanelProps
    * Useful when parent component manages save state.
    */
   isDirty?: boolean;
+  /**
+   * Whether vim keybindings are enabled on the CodeMirror surfaces
+   * (source view + fenced code blocks).
+   * If provided, the host controls vim state; otherwise the panel tracks it
+   * internally (defaulting to {@link defaultVimEnabled}).
+   */
+  vimEnabled?: boolean;
+  /**
+   * Initial vim state when the panel is uncontrolled (i.e. `vimEnabled` is not
+   * provided). Defaults to true.
+   */
+  defaultVimEnabled?: boolean;
+  /**
+   * Called whenever vim is toggled (by the user or, in controlled mode, when a
+   * toggle is requested). Lets the host persist the user's preference.
+   */
+  onVimEnabledChange?: (enabled: boolean) => void;
+  /**
+   * Desired editor view mode (`rich-text` | `source` | `diff`).
+   * When provided and different from the current mode, the panel switches the
+   * editor to it. Also used as the initial mode on mount.
+   */
+  viewMode?: ViewMode;
+  /**
+   * Called on mount and whenever the editor's view mode changes, so the host
+   * can track and persist the current mode.
+   */
+  onViewModeChange?: (mode: ViewMode) => void;
 }
 
 /**
@@ -82,6 +117,11 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
   showCloseButton = true,
   gitStatus: gitStatusProp,
   isDirty: isDirtyProp,
+  vimEnabled: vimEnabledProp,
+  defaultVimEnabled = true,
+  onVimEnabledChange,
+  viewMode: viewModeProp,
+  onViewModeChange,
 }) => {
   const { theme } = useTheme();
   const [filePath, setFilePath] = useState<string | null>(null);
@@ -96,6 +136,23 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
   // Use prop values if provided, otherwise use internal state
   const _isDirty = isDirtyProp !== undefined ? isDirtyProp : internalIsDirty;
   const gitStatus = gitStatusProp !== undefined ? gitStatusProp : internalGitStatus;
+
+  // Vim state: host-controlled when `vimEnabled` is provided, else internal.
+  const [internalVimEnabled, setInternalVimEnabled] = useState<boolean>(defaultVimEnabled);
+  const vimEnabled = vimEnabledProp !== undefined ? vimEnabledProp : internalVimEnabled;
+  const handleVimEnabledChange = useCallback(
+    (next: boolean) => {
+      if (vimEnabledProp === undefined) {
+        setInternalVimEnabled(next);
+      }
+      onVimEnabledChange?.(next);
+    },
+    [vimEnabledProp, onVimEnabledChange]
+  );
+
+  // Stable compartment shared between the editor extensions and the toggle so
+  // vim can be reconfigured live without remounting the editor.
+  const vimCompartment = useVimCompartment();
 
   // File editing is always available via actions
   const isEditable = Boolean(actions.writeFile);
@@ -142,12 +199,13 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
           shell: 'Shell',
           sql: 'SQL',
         },
-        codeMirrorExtensions: [basicDark],
+        // Vim first so its keymap takes precedence over CodeMirror defaults.
+        codeMirrorExtensions: [vimExtension(vimCompartment, vimEnabled), basicDark],
       }),
       frontmatterPlugin(),
       diffSourcePlugin({
-        viewMode: parseError ? 'source' : 'rich-text',
-        codeMirrorExtensions: [basicDark],
+        viewMode: viewModeProp ?? (parseError ? 'source' : 'rich-text'),
+        codeMirrorExtensions: [vimExtension(vimCompartment, vimEnabled), basicDark],
       }),
       toolbarPlugin({
         toolbarContents: () => (
@@ -163,6 +221,15 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
               <InsertThematicBreak />
               <ListsToggle />
             </DiffSourceToggleWrapper>
+            {/* Headless: reports view-mode changes to the host and applies
+                host-requested mode switches. Must live inside the editor realm. */}
+            <ViewModeController desired={viewModeProp} onChange={onViewModeChange} />
+            {/* Toggles vim on the CodeMirror surfaces; hidden in rich-text. */}
+            <VimToggle
+              compartment={vimCompartment}
+              enabled={vimEnabled}
+              onChange={handleVimEnabledChange}
+            />
           </>
         ),
         statusContent: () => (
@@ -195,7 +262,17 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
         ),
       }),
     ],
-    [parseError, _isDirty, gitStatus, theme]
+    [
+      parseError,
+      _isDirty,
+      gitStatus,
+      theme,
+      vimCompartment,
+      vimEnabled,
+      handleVimEnabledChange,
+      viewModeProp,
+      onViewModeChange,
+    ]
   );
 
   useEffect(() => {
