@@ -74,7 +74,8 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
   color: var(--baseTextContrast);
-  --basePageBg: var(--mauve-1);
+  /* Use the panel/theme background when provided, falling back to mauve-1 */
+  --basePageBg: var(--panel-bg, var(--mauve-1));
   background: var(--basePageBg);
 }
 
@@ -95,4 +96,9 @@
 .dark-editor.mdxeditor p,
 .dark-editor.mdxeditor li {
   color: var(--baseTextContrast);
+}
+
+/* Square off the toolbar (panel header) — the library rounds its corners */
+.dark-editor.mdxeditor [class*="toolbarRoot"] {
+  border-radius: 0;
 }

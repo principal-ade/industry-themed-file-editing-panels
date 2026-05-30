@@ -451,7 +451,10 @@ const MDXEditorPanelContent: React.FC<MDXEditorPanelProps> = ({
         backgroundColor: theme.colors.background,
         color: theme.colors.text,
         overflow: 'auto',
-      }}
+        // Drive the MDXEditor surface color from the theme so the editor
+        // background matches the wrapper (see --basePageBg in dark-editor.css)
+        ['--panel-bg' as string]: theme.colors.background,
+      } as React.CSSProperties}
     >
       <MDXEditor
         key={filePath || 'default'}
